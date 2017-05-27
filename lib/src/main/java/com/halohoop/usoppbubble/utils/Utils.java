@@ -15,6 +15,7 @@ import android.view.WindowManager;
  */
 
 public class Utils {
+    public static final boolean DEBUG = true;
     /**
      * 得到传入的view的bitmap
      * @param view
@@ -113,24 +114,6 @@ public class Utils {
     }
 
     /**
-     * point0 and point1 distance / maxDistance
-     * @param currMoveX
-     * @param currMoveY
-     * @param fixX
-     * @param fixY
-     * @param maxDistance
-     * @return
-     */
-    public static float getRatioFromMaxDistance(float currMoveX, float currMoveY,
-                                                           float fixX, float fixY,
-                                                           float maxDistance) {
-        float ratio = 1;
-        float twoPointsDistance = getTwoPointsDistance(currMoveX, currMoveY, fixX, fixY);
-        ratio = twoPointsDistance / maxDistance;
-        return ratio;
-    }
-
-    /**
      * 获取屏幕宽高
      * @param context
      * @return
@@ -152,7 +135,9 @@ public class Utils {
     private static final String TAG = "UsoppBubble--";
 
     public static void l(String str) {
-        Log.i(TAG, str);
+        if (DEBUG) {
+            Log.i(TAG, str);
+        }
     }
 
 }

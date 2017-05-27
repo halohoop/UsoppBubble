@@ -7,8 +7,11 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.EmbossMaskFilter;
+import android.graphics.MaskFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
@@ -83,6 +86,23 @@ public class UsoppBubble extends AppCompatTextView {
         return true;
     }
 
+
+    /**
+     * 画出来的桩点和橡皮筋 是什么 样式
+     */
+    public final static int MODE_NONE = 0;
+    public final static int MODE_GLOW = 1;
+    public final static int MODE_EMBOSS = 2;
+    private int mMode = MODE_NONE;
+
+    public int getmMode() {
+        return mMode;
+    }
+
+    public void setmMode(int mMode) {
+        this.mMode = mMode;
+    }
+
     /**
      * 将要加入wm的view
      */
@@ -95,7 +115,7 @@ public class UsoppBubble extends AppCompatTextView {
             debugPaint = null;
         }
 
-        private View mClickView;//UsoppBubble
+        private UsoppBubble mClickView;//UsoppBubble
         /**
          * 屏幕的宽高,onSizeChanged的时候会重新更新
          */
@@ -165,6 +185,7 @@ public class UsoppBubble extends AppCompatTextView {
         private PointF mStickyPointCenter0 = new PointF();
         private PointF mStickyPointCenterMid = new PointF();
         private PointF mStickyPointCenter1 = new PointF();
+        private int mColorStickyPointCenter = Color.rgb(245, 179, 43);
         private int mColorStickyPointCenterNotReady = Color.rgb(243, 67, 54);
         private int mColorStickyPointCenterReady = Color.rgb(76, 175, 80);
         private float mStickyPointRaidus = 12;
@@ -208,15 +229,16 @@ public class UsoppBubble extends AppCompatTextView {
         private Path mElasticPath;
         private int mElasticColor = Color.rgb(255, 78, 18);
 
-        public BubblesInternalView(Context context, View clickView, float rawX, float rawY) {
+        public BubblesInternalView(Context context, UsoppBubble clickView, float rawX, float rawY) {
             super(context, null, 0);
             if (DEBUG) {
                 debugPaint = new Paint();
             }
+            setLayerType(LAYER_TYPE_SOFTWARE, null);
             init(clickView, rawX, rawY);
         }
 
-        private void init(View clickView, float rawX, float rawY) {
+        private void init(UsoppBubble clickView, float rawX, float rawY) {
             this.mClickView = clickView;
             mScreenSize = Utils.getScreenSize(getContext());
 
@@ -276,12 +298,22 @@ public class UsoppBubble extends AppCompatTextView {
             mPaint.setStrokeWidth(1);
             mPaint.setColor(mElasticColor);
             mElasticPath = new Path();
-//            float []direction = new float[]{10, 10, 10};
-//            float ambient = 0.5f;
-//            float specular = 1;
-//            float blurRadius = 1;
-//            EmbossMaskFilter filter = new EmbossMaskFilter(direction, ambient, specular, blurRadius);
-//            mPaint.setMaskFilter(filter);
+            MaskFilter filter = null;
+            switch (mClickView.getmMode()) {
+                case MODE_NONE:
+                    break;
+                case MODE_GLOW:
+                    filter = new BlurMaskFilter(10, BlurMaskFilter.Blur.OUTER);
+                    break;
+                case MODE_EMBOSS:
+                    float[] direction = new float[]{10, 10, 10};
+                    float ambient = 0.5f;
+                    float specular = 1;
+                    float blurRadius = 1;
+                    filter = new EmbossMaskFilter(direction, ambient, specular, blurRadius);
+                    break;
+            }
+            mPaint.setMaskFilter(filter);
         }
 
         private WindowManager mWm;
@@ -320,13 +352,13 @@ public class UsoppBubble extends AppCompatTextView {
             mIsReadyToLaunch = isReadyToLaunch(currMoveX, currMoveY);
 
             //进入了重置区域
-            if (isInResetArea(currMoveX, currMoveY)) {
-                mRotateDegrees = 0;
-                mIsDrawReset = true;
-                mDragBitmapOffsetX = -mDragBitmap.getWidth() / 2.0f;
-                mDragBitmapOffsetY = -mDragBitmap.getHeight() / 2.0f;
-                return;
-            }
+//            if (isInResetArea(currMoveX, currMoveY)) {
+//                mRotateDegrees = 0;
+//                mIsDrawReset = true;
+//                mDragBitmapOffsetX = -mDragBitmap.getWidth() / 2.0f;
+//                mDragBitmapOffsetY = -mDragBitmap.getHeight() / 2.0f;
+//                return;
+//            }
             mIsDrawReset = false;
 
             //首先更新移动点不要错乱
@@ -338,10 +370,16 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         private void updateStickyPointsAndElasticControlPoints(float currMoveX, float currMoveY) {
-            float innerQuadSidesOffset = mIsReadyToLaunch ? mMovePointQuadSidesOffset :
-                    getQuadSidesOffset(currMoveX, currMoveY,mStickyPointCenterMid.x,mStickyPointCenterMid.y,mMovePointQuadSidesOffset,mLaunchArea.width()/2);
-            float outerQuadSidesOffset = mIsReadyToLaunch ? mQuadSidesOuterOffset :
-                    getQuadSidesOffset(currMoveX, currMoveY,mStickyPointCenterMid.x,mStickyPointCenterMid.y, mQuadSidesOuterOffset,mLaunchArea.width()/2);
+            float ratioInLaunchArea = 1;
+            float innerQuadSidesOffset = mMovePointQuadSidesOffset;
+            float outerQuadSidesOffset = mQuadSidesOuterOffset;
+            if (!mIsReadyToLaunch) {
+                ratioInLaunchArea = Utils.getTwoPointsDistance(currMoveX, currMoveY, mStickyPointCenterMid.x, mStickyPointCenterMid.y) / (mLaunchArea.width() / 2);
+                innerQuadSidesOffset = ratioInLaunchArea * mMovePointQuadSidesOffset;
+                outerQuadSidesOffset = ratioInLaunchArea * mQuadSidesOuterOffset;
+                mStickyPointRaidus = mStickyPointRaidusReady * (1-ratioInLaunchArea);
+            }
+
 
             float disX = Math.abs(mStickyPointCenterMid.x - currMoveX);
             float disY = Math.abs(mStickyPointCenterMid.y - currMoveY);
@@ -464,26 +502,6 @@ public class UsoppBubble extends AppCompatTextView {
             return mStickySensor.contains(rawX, rawY);
         }
 
-        /**
-         * 得到两点距离 和 maxDistance的比例，然后根据比例和参数5相乘得到最终的值，
-         * 也就是从参数5中获取一部分
-         * @param currMoveX
-         * @param currMoveY
-         * @param fixX
-         * @param fixY
-         * @param distance2BeGetFrom
-         * @param maxDistance
-         * @return
-         */
-        private float getQuadSidesOffset(float currMoveX, float currMoveY,
-                                         float fixX, float fixY,
-                                         float distance2BeGetFrom,
-                                         float maxDistance) {
-            float ratioFromMaxDistance = Utils.getRatioFromMaxDistance(currMoveX, currMoveY, fixX, fixY, maxDistance);
-            Utils.l("ratioFromMaxDistance:"+ratioFromMaxDistance);
-            return ratioFromMaxDistance * distance2BeGetFrom;
-        }
-
         private void updateLaunchDirection(PointF stickyPointCenterMid, PointF movePointCenter) {
             //四条线，固定的中点连接四个角形成
             float[] k_h_LeftTop = Utils.getTwoPointLine(stickyPointCenterMid, new PointF(0, 0));
@@ -526,55 +544,101 @@ public class UsoppBubble extends AppCompatTextView {
                 debugPaint.setColor(Color.GREEN);
                 canvas.drawText("DEBUG_MODE_UsoppBubble", 0, mScreenSize.y / 2, debugPaint);
             }
-            if (mBubbleState == BUBBLE_STATE_RELEASE_LAUNCH || mBubbleState == BUBBLE_STATE_RELEASE_NO_LAUNCH) {
-                if (mDragBitmap != null && !mDragBitmap.isRecycled()) {
-                    canvas.save();
-                    canvas.translate(mLaunchXRaw, mLaunchYRaw);
-                    canvas.save();
-                    canvas.rotate(mRotateDegrees, 0, 0);
-                    canvas.translate(-mDragBitmap.getWidth(), -mDragBitmap.getHeight() / 2.0f);
-                    canvas.drawBitmap(mDragBitmap, 0, 0, null);
-                    canvas.restore();
-                    canvas.restore();
-                    mElasticPath.reset();
-                    mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
-                    mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
-                            mMovePointCenter.x, mMovePointCenter.y);
-                    mElasticPath.quadTo(mSidesInnerBesierCtrlPoint1.x, mSidesInnerBesierCtrlPoint1.y,
-                            mStickyPointCenter1.x, mStickyPointCenter1.y);
-
-                    mElasticPath.quadTo(mSidesOuterBesierCtrlPoint1.x, mSidesOuterBesierCtrlPoint1.y,
-                            mMovePointCenter.x, mMovePointCenter.y);
-                    mElasticPath.quadTo(mSidesOuterBesierCtrlPoint0.x, mSidesOuterBesierCtrlPoint0.y,
-                            mStickyPointCenter0.x, mStickyPointCenter0.y);
-
-                    mPaint.setStyle(Paint.Style.FILL);
-                    mPaint.setColor(mElasticColor);
-                    mPaint.setStrokeWidth(1);
-                    canvas.drawPath(mElasticPath, mPaint);
-
-                    //画固定点的桩
-                    drawStickyPoints(canvas);
-                }
-            } else if (mBubbleState == BUBBLE_STATE_BURSRT) {
-                if (mBitmapsExplodes != null && mBurstRectF != null) {
-                    canvas.drawBitmap(mBitmapsExplodes[mCurDrawableIndex], null, mBurstRectF, null);
-                }
+            if (mBubbleState == BUBBLE_STATE_RELEASE_NO_LAUNCH) {
+                drawBounce(canvas);
+            } else if(mBubbleState == BUBBLE_STATE_RELEASE_LAUNCH){
+                drawLaunch(canvas);
+            }else if (mBubbleState == BUBBLE_STATE_BURSRT) {
+                drawBurst(canvas);
             } else if (mBubbleState == BUBBLE_STATE_DRAGGING) {
-                if (!mIsDrawReset) {
-                    canvas.save();
-                    canvas.rotate(mRotateDegrees, mMovePointCenter.x, mMovePointCenter.y);
-                }
-                canvas.translate(mDragBitmapOffsetX, mDragBitmapOffsetY);
-                if (mIsDrawReset) {
-                    if (mDragBitmap != null && !mDragBitmap.isRecycled())
-                        canvas.drawBitmap(mDragBitmap, mStickyPointCenterMid.x, mStickyPointCenterMid.y, null);
-                    return;
-                } else {
-                    if (mDragBitmap != null && !mDragBitmap.isRecycled())
-                        canvas.drawBitmap(mDragBitmap, mMovePointCenter.x, mMovePointCenter.y, null);
-                    canvas.restore();
-                }
+                drawDragging(canvas);
+            }
+        }
+
+        private void drawDragging(Canvas canvas) {
+            if (!mIsDrawReset) {
+                canvas.save();
+                canvas.rotate(mRotateDegrees, mMovePointCenter.x, mMovePointCenter.y);
+            }
+            canvas.translate(mDragBitmapOffsetX, mDragBitmapOffsetY);
+            if (mIsDrawReset) {
+                if (mDragBitmap != null && !mDragBitmap.isRecycled())
+                    canvas.drawBitmap(mDragBitmap, mStickyPointCenterMid.x, mStickyPointCenterMid.y, null);
+                return;
+            } else {
+                if (mDragBitmap != null && !mDragBitmap.isRecycled())
+                    canvas.drawBitmap(mDragBitmap, mMovePointCenter.x, mMovePointCenter.y, null);
+                canvas.restore();
+            }
+            mElasticPath.reset();
+            mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
+            mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
+                    mMovePointCenter.x, mMovePointCenter.y);
+            mElasticPath.quadTo(mSidesInnerBesierCtrlPoint1.x, mSidesInnerBesierCtrlPoint1.y,
+                    mStickyPointCenter1.x, mStickyPointCenter1.y);
+
+            mElasticPath.quadTo(mSidesOuterBesierCtrlPoint1.x, mSidesOuterBesierCtrlPoint1.y,
+                    mMovePointCenter.x, mMovePointCenter.y);
+            mElasticPath.quadTo(mSidesOuterBesierCtrlPoint0.x, mSidesOuterBesierCtrlPoint0.y,
+                    mStickyPointCenter0.x, mStickyPointCenter0.y);
+
+            mPaint.setStyle(Paint.Style.FILL);
+            mPaint.setColor(mElasticColor);
+            mPaint.setStrokeWidth(1);
+            canvas.drawPath(mElasticPath, mPaint);
+
+            //画固定点的桩
+            drawStickyPoints(canvas);
+        }
+
+        private void drawBurst(Canvas canvas) {
+            if (mBitmapsExplodes != null && mBurstRectF != null) {
+                canvas.drawBitmap(mBitmapsExplodes[mCurDrawableIndex], null, mBurstRectF, null);
+            }
+        }
+
+        private void drawBounce(Canvas canvas) {
+            if (mDragBitmap != null && !mDragBitmap.isRecycled()) {
+                canvas.save();
+                canvas.translate(mLaunchXRaw, mLaunchYRaw);
+                canvas.save();
+                canvas.rotate(mRotateDegrees, 0, 0);
+                canvas.translate(-mDragBitmap.getWidth(), -mDragBitmap.getHeight() / 2.0f);
+                canvas.drawBitmap(mDragBitmap, 0, 0, null);
+                canvas.restore();
+                canvas.restore();
+                mElasticPath.reset();
+                mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
+                mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
+                        mMovePointCenter.x, mMovePointCenter.y);
+                mElasticPath.quadTo(mSidesInnerBesierCtrlPoint1.x, mSidesInnerBesierCtrlPoint1.y,
+                        mStickyPointCenter1.x, mStickyPointCenter1.y);
+
+                mElasticPath.quadTo(mSidesOuterBesierCtrlPoint1.x, mSidesOuterBesierCtrlPoint1.y,
+                        mMovePointCenter.x, mMovePointCenter.y);
+                mElasticPath.quadTo(mSidesOuterBesierCtrlPoint0.x, mSidesOuterBesierCtrlPoint0.y,
+                        mStickyPointCenter0.x, mStickyPointCenter0.y);
+
+                mPaint.setStyle(Paint.Style.FILL);
+                mPaint.setColor(mElasticColor);
+                mPaint.setStrokeWidth(1);
+                canvas.drawPath(mElasticPath, mPaint);
+
+                //画固定点的桩
+                drawStickyPoints(canvas);
+            }
+        }
+
+        private void drawLaunch(Canvas canvas) {
+            if (mDragBitmap != null && !mDragBitmap.isRecycled()) {
+                canvas.save();
+                canvas.translate(mLaunchXRaw, mLaunchYRaw);
+                canvas.save();
+                canvas.rotate(mRotateDegrees, 0, 0);
+                canvas.translate(-mDragBitmap.getWidth(), -mDragBitmap.getHeight() / 2.0f);
+                canvas.drawBitmap(mDragBitmap, 0, 0, null);
+                canvas.restore();
+                canvas.restore();
                 mElasticPath.reset();
                 mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
                 mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
@@ -599,9 +663,11 @@ public class UsoppBubble extends AppCompatTextView {
 
         private void drawStickyPoints(Canvas canvas) {
             mPaint.setStrokeWidth(1);//只要不是stoke模式，画圆就和这个设置参数没关系
-            mPaint.setColor(mIsReadyToLaunch ?
-                    mColorStickyPointCenterReady : mColorStickyPointCenterNotReady);
+            mPaint.setColor(mIsReadyToLaunch?mColorStickyPointCenterReady:mColorStickyPointCenter);
             mPaint.setStyle(Paint.Style.FILL);
+            canvas.drawCircle(mStickyPointCenter0.x, mStickyPointCenter0.y, mStickyPointRaidusReady, mPaint);
+            canvas.drawCircle(mStickyPointCenter1.x, mStickyPointCenter1.y, mStickyPointRaidusReady, mPaint);
+            mPaint.setColor(mColorStickyPointCenterNotReady);
             canvas.drawCircle(mStickyPointCenter0.x, mStickyPointCenter0.y, mStickyPointRaidus, mPaint);
             canvas.drawCircle(mStickyPointCenter1.x, mStickyPointCenter1.y, mStickyPointRaidus, mPaint);
         }
@@ -615,8 +681,7 @@ public class UsoppBubble extends AppCompatTextView {
             mBubbleState = BUBBLE_STATE_RELEASE_LAUNCH;
             mIsLaunchAnimStart = true;
             ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX, endRawY);
-            anim.setInterpolator(new AccelerateInterpolator(4));
-            anim.setDuration(250);
+            anim.setInterpolator(new AccelerateInterpolator(0.4f));
             anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
@@ -628,6 +693,7 @@ public class UsoppBubble extends AppCompatTextView {
                     invalidate();
                 }
             });
+            anim.setDuration(100);
             anim.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
@@ -651,7 +717,7 @@ public class UsoppBubble extends AppCompatTextView {
             float offsetX = (endRawX - startRawX) * (1 - 0.05f);
             float offsetY = (endRawY - startRawY) * (1 - 0.05f);
             ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX - offsetX, endRawY - offsetY);
-            anim.setInterpolator(new OvershootInterpolator(5f));
+            anim.setInterpolator(new OvershootInterpolator(20f));
             anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
