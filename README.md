@@ -2,9 +2,9 @@
 
 ![Demo pic](./sample/src/main/res/mipmap-xxxhdpi/usopp_round.png)
 
-![Demo pic](./demo.gif)
-
 ![Demo pic](./demo2.gif)
+
+![Demo pic](./demo.gif)
 
 ## Not finish yet!
 
