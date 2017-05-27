@@ -4,6 +4,8 @@
 
 ![Demo pic](./demo.gif)
 
+![Demo pic](./demo2.gif)
+
 ## Not finish yet!
 
 

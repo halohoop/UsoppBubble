@@ -101,6 +101,9 @@ public class UsoppBubble extends AppCompatTextView {
 
     public void setmMode(int mMode) {
         this.mMode = mMode;
+        if (mBubblesView != null) {
+            mBubblesView.setPaintMaskFilter(mMode);
+        }
     }
 
     /**
@@ -143,7 +146,7 @@ public class UsoppBubble extends AppCompatTextView {
         /**
          * 状态标志
          */
-        private int mBubbleState = BUBBLE_STATE_DRAGGING;
+        private int mBubbleState = BUBBLE_STATE_RELEASE_NO_LAUNCH;
         /**
          * 动画是否已经开始
          */
@@ -158,7 +161,7 @@ public class UsoppBubble extends AppCompatTextView {
         /**
          * >=这个范围才会发射
          */
-        private float mLaunchThreadhold = 100;
+        private float mLaunchThreadhold = 80;
         private RectF mLaunchArea = null;
         private static final int LAUNCH_TO_LEFT = 0;
         private static final int LAUNCH_TO_TOP = 1;
@@ -243,7 +246,7 @@ public class UsoppBubble extends AppCompatTextView {
             mScreenSize = Utils.getScreenSize(getContext());
 
             mResetSensorRaidus = Math.min(mScreenSize.x,mScreenSize.y) / 14.4f;//经验值
-            mLaunchThreadhold = Math.min(mScreenSize.x,mScreenSize.y) / 8f;//经验值
+            mLaunchThreadhold = Math.min(mScreenSize.x,mScreenSize.y) / 9f;//经验值
 
             //创建wm，并且将自己的加进去
             createWmAndLayoutParams();
@@ -298,22 +301,8 @@ public class UsoppBubble extends AppCompatTextView {
             mPaint.setStrokeWidth(1);
             mPaint.setColor(mElasticColor);
             mElasticPath = new Path();
-            MaskFilter filter = null;
-            switch (mClickView.getmMode()) {
-                case MODE_NONE:
-                    break;
-                case MODE_GLOW:
-                    filter = new BlurMaskFilter(10, BlurMaskFilter.Blur.OUTER);
-                    break;
-                case MODE_EMBOSS:
-                    float[] direction = new float[]{10, 10, 10};
-                    float ambient = 0.5f;
-                    float specular = 1;
-                    float blurRadius = 1;
-                    filter = new EmbossMaskFilter(direction, ambient, specular, blurRadius);
-                    break;
-            }
-            mPaint.setMaskFilter(filter);
+
+            setPaintMaskFilter(mClickView.getmMode());
         }
 
         private WindowManager mWm;
@@ -336,7 +325,6 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         private float mRotateDegrees = 0;
-        private boolean mIsDrawReset = true;
         /**
          * 是否拖出达到了可以发射的区域
          */
@@ -349,17 +337,18 @@ public class UsoppBubble extends AppCompatTextView {
          * @param currMoveY
          */
         public void updatePoints(float currMoveX, float currMoveY) {
+            mBubbleState = BUBBLE_STATE_DRAGGING;
             mIsReadyToLaunch = isReadyToLaunch(currMoveX, currMoveY);
 
             //进入了重置区域
-//            if (isInResetArea(currMoveX, currMoveY)) {
-//                mRotateDegrees = 0;
-//                mIsDrawReset = true;
-//                mDragBitmapOffsetX = -mDragBitmap.getWidth() / 2.0f;
-//                mDragBitmapOffsetY = -mDragBitmap.getHeight() / 2.0f;
-//                return;
-//            }
-            mIsDrawReset = false;
+            /*if (isInResetArea(currMoveX, currMoveY)) {
+                mRotateDegrees = 0;
+                mIsDrawReset = true;
+                mDragBitmapOffsetX = -mDragBitmap.getWidth() / 2.0f;
+                mDragBitmapOffsetY = -mDragBitmap.getHeight() / 2.0f;
+                return;
+            }
+            mIsDrawReset = false;*/
 
             //首先更新移动点不要错乱
             updateJustMovePoints(currMoveX,currMoveY);
@@ -555,8 +544,15 @@ public class UsoppBubble extends AppCompatTextView {
             }
         }
 
+//        private boolean mIsDrawReset = false;
         private void drawDragging(Canvas canvas) {
-            if (!mIsDrawReset) {
+            canvas.save();
+            canvas.rotate(mRotateDegrees, mMovePointCenter.x, mMovePointCenter.y);
+            canvas.translate(mDragBitmapOffsetX, mDragBitmapOffsetY);
+            if (mDragBitmap != null && !mDragBitmap.isRecycled())
+                canvas.drawBitmap(mDragBitmap, mMovePointCenter.x, mMovePointCenter.y, null);
+            canvas.restore();
+            /*if (!mIsDrawReset) {
                 canvas.save();
                 canvas.rotate(mRotateDegrees, mMovePointCenter.x, mMovePointCenter.y);
             }
@@ -569,7 +565,7 @@ public class UsoppBubble extends AppCompatTextView {
                 if (mDragBitmap != null && !mDragBitmap.isRecycled())
                     canvas.drawBitmap(mDragBitmap, mMovePointCenter.x, mMovePointCenter.y, null);
                 canvas.restore();
-            }
+            }*/
             mElasticPath.reset();
             mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
@@ -735,6 +731,7 @@ public class UsoppBubble extends AppCompatTextView {
                     //修改动画执行标志
                     mIsBounceAnimStart = false;
                     resetToDefault();
+                    mClickView.setVisibility(View.VISIBLE);
                 }
             });
             anim.start();
@@ -778,7 +775,6 @@ public class UsoppBubble extends AppCompatTextView {
 
         private void resetToDefault() {
             clear();
-            mClickView.setVisibility(View.VISIBLE);
         }
 
         /**
@@ -788,10 +784,10 @@ public class UsoppBubble extends AppCompatTextView {
          * @param rawY
          */
         public void prepareForAnim(float rawX, float rawY) {
-            if (isInResetArea(rawX, rawY)) {
-                resetToDefault();
-                return;
-            }
+//            if (isInResetArea(rawX, rawY)) {
+//                resetToDefault();
+//                return;
+//            }
             Point screenSize = getScreenSize(getContext());
             //得到过两点直线的斜率和偏移
             float[] k_h = Utils.getTwoPointLine(mMovePointCenter, mStickyPointCenterMid);
@@ -835,6 +831,25 @@ public class UsoppBubble extends AppCompatTextView {
                 mBitmapsExplodes = null;
             }
             mWm.removeView(this);
+        }
+
+        public void setPaintMaskFilter(int mode) {
+            MaskFilter filter = null;
+            switch (mode) {
+                case MODE_NONE:
+                    break;
+                case MODE_GLOW:
+                    filter = new BlurMaskFilter(10, BlurMaskFilter.Blur.OUTER);
+                    break;
+                case MODE_EMBOSS:
+                    float[] direction = new float[]{10, 10, 10};
+                    float ambient = 0.5f;
+                    float specular = 1;
+                    float blurRadius = 1;
+                    filter = new EmbossMaskFilter(direction, ambient, specular, blurRadius);
+                    break;
+            }
+            mPaint.setMaskFilter(filter);
         }
     }
 
