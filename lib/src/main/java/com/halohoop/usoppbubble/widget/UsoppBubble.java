@@ -669,7 +669,9 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         private boolean isReadyToLaunch(float rawX, float rawY) {
-            return !mLaunchArea.contains(rawX, rawY);
+//            return !mLaunchArea.contains(rawX, rawY);
+            float hypot = (float) Math.hypot(rawX - mLaunchArea.centerX(), rawY - mLaunchArea.centerY());
+            return hypot <= mLaunchArea.width() / 2?false:true;
         }
 
         private void launch(float startRawX, float startRawY, final float endRawX, final float endRawY) {

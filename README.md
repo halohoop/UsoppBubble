@@ -1,4 +1,4 @@
-# Halohoop Android Skill Dig In
+# UsoppBubble
 
 ![Demo pic](./sample/src/main/res/mipmap-xxxhdpi/usopp_round.png)
 
