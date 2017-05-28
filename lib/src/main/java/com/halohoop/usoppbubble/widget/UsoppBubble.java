@@ -727,7 +727,7 @@ public class UsoppBubble extends AppCompatTextView {
             float offsetX = (endRawX - startRawX) * (1 - 0.05f);
             float offsetY = (endRawY - startRawY) * (1 - 0.05f);
             ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX - offsetX, endRawY - offsetY);
-            anim.setInterpolator(new OvershootInterpolator(20f));
+            anim.setInterpolator(new OvershootInterpolator(50f));
             anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
