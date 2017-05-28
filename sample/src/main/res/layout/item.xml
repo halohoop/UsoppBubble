@@ -19,10 +19,11 @@
 
         <com.halohoop.usoppbubble.widget.UsoppBubble
             android:id="@+id/bubble"
+            android:textColor="@android:color/white"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="right|center_vertical"
-            android:background="@drawable/bg"
+            android:background="@drawable/bg_blue"
             android:text="1111" />
 
     </FrameLayout>
