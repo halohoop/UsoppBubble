@@ -66,7 +66,8 @@ public class UsoppBubble extends AppCompatTextView {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 createBubbles(rawX, rawY);
-//                mParent = (ViewGroup) getParent();
+                //重要，请求父类不要拦截触摸事件
+                getParent().requestDisallowInterceptTouchEvent(true);
 //                mIndexAtParent = mParent.indexOfChild(this);
 //                mParent.removeView(this);
                 mBubblesView.updatePoints(rawX, rawY);
@@ -110,6 +111,7 @@ public class UsoppBubble extends AppCompatTextView {
      * 将要加入wm的view
      */
     private static class BubblesInternalView extends View {
+
         private boolean DEBUG = true;
         private Paint debugPaint;
 
@@ -118,6 +120,8 @@ public class UsoppBubble extends AppCompatTextView {
             debugPaint = null;
         }
 
+        //when create instance it should be initialized
+        private DraggableListener mDragListener = null;
         private UsoppBubble mClickView;//UsoppBubble
         /**
          * 屏幕的宽高,onSizeChanged的时候会重新更新
@@ -238,6 +242,7 @@ public class UsoppBubble extends AppCompatTextView {
                 debugPaint = new Paint();
             }
             setLayerType(LAYER_TYPE_SOFTWARE, null);
+            this.mDragListener = clickView.getDragListener();
             init(clickView, rawX, rawY);
         }
 
@@ -318,6 +323,7 @@ public class UsoppBubble extends AppCompatTextView {
             mLayoutParams.gravity = Gravity.LEFT | Gravity.TOP;
             mLayoutParams.type = WindowManager.LayoutParams.TYPE_TOAST;
             mLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                     | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;//全屏，不设置就会排在状态栏下面
             mLayoutParams.x = 0;
             mLayoutParams.y = 0;
@@ -675,6 +681,9 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         private void launch(float startRawX, float startRawY, final float endRawX, final float endRawY) {
+            if (mDragListener != null) {
+                mDragListener.onOnBubbleReleaseWithLaunch(mClickView);
+            }
             //气泡改为发射状态
             mBubbleState = BUBBLE_STATE_RELEASE_LAUNCH;
             mIsLaunchAnimStart = true;
@@ -709,6 +718,9 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         private void bounce(float startRawX, float startRawY, float endRawX, float endRawY) {
+            if (mDragListener != null) {
+                mDragListener.onOnBubbleReleaseWithoutLaunch(mClickView);
+            }
             //气泡改为发射状态
             mBubbleState = BUBBLE_STATE_RELEASE_NO_LAUNCH;
             mIsBounceAnimStart = true;
@@ -857,19 +869,24 @@ public class UsoppBubble extends AppCompatTextView {
 
     private DraggableListener mDragListener = null;
 
-    public void setDragListener(DraggableListener mDragListener) {
-        this.mDragListener = mDragListener;
+    public void setDragListener(DraggableListener dragListener) {
+        this.mDragListener = dragListener;
     }
 
-    interface DraggableListener {
+    public DraggableListener getDragListener() {
+        return mDragListener;
+    }
+
+    public interface DraggableListener {
         /**
          * 放手发射了
          */
-        void onOnBubbleReleaseWithLaunch();
+        void onOnBubbleReleaseWithLaunch(UsoppBubble view);
 
         /**
          * 放手没有发射
          */
-        void onOnBubbleReleaseWithoutLaunch();
+        void onOnBubbleReleaseWithoutLaunch(UsoppBubble view);
+//        void onOnBubbleDragging();//may be later
     }
 }
