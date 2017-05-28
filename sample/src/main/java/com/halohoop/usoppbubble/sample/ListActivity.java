@@ -55,7 +55,7 @@ public class ListActivity extends AppCompatActivity implements UsoppBubble.Dragg
 
         @Override
         public void onBindViewHolder(ViewHolder holder, int position) {
-            holder.usoppBubble.setText(random.nextInt(99) + "");
+            holder.usoppBubble.setText(random.nextInt(99) + "+");
             holder.tvName.setText(Cheeses.sCheeseStrings[position]);
             holder.usoppBubble.setDragListener(ListActivity.this);
             holder.usoppBubble.setVisibility(View.VISIBLE);
