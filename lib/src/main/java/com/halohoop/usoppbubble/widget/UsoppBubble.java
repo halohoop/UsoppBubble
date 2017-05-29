@@ -38,8 +38,6 @@ import android.view.animation.OvershootInterpolator;
 import com.halohoop.usoppbubble.R;
 import com.halohoop.usoppbubble.utils.Utils;
 
-import static com.halohoop.usoppbubble.utils.Utils.getScreenSize;
-
 /**
  * Created by Pooholah on 2017/5/26.
  */
@@ -306,7 +304,8 @@ public class UsoppBubble extends AppCompatTextView {
 //            clickView.getGlobalVisibleRect(mClickViewRect);
             clickView.getLocalVisibleRect(mClickViewRect);
             int[] location = new int[2];
-            clickView.getLocationOnScreen(location);
+//            clickView.getLocationOnScreen(location);
+            clickView.getLocationInWindow(location);
             int left = location[0];
             int top = location[1];
             mClickViewRect.offset(left, top);
@@ -777,14 +776,16 @@ public class UsoppBubble extends AppCompatTextView {
             float bottom = mClickViewRect.height();
             float midHeight = bottom / 2.0f;
             float midWidth = right / 2.0f;
-            float offset = mClickViewRect.width() - ((float)mClickViewRect.width())/1.845f;
 
             mPaint.setMaskFilter(null);
             mPaint.setColor(Color.rgb(150, 215, 240));
+            float offset = 0;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                offset = mClickViewRect.width() - ((float)mClickViewRect.width())/1.845f;
                 canvas.drawArc(left+offset,top,right,bottom,-90,180,true,mPaint);
                 canvas.drawArc(left,top,right-offset,bottom,90,180,true,mPaint);
             }else{
+                offset = mClickViewRect.width() - ((float)mClickViewRect.width())/1.35f;
                 canvas.drawCircle(left+offset,midHeight,midHeight,mPaint);
                 canvas.drawCircle(right-offset,midHeight,midHeight,mPaint);
             }
@@ -806,9 +807,11 @@ public class UsoppBubble extends AppCompatTextView {
             mPaint.setMaskFilter(mFilter);
             canvas.drawCircle(mStickyPointCenter0.x, mStickyPointCenter0.y, mStickyPointRaidusReady, mPaint);
             canvas.drawCircle(mStickyPointCenter1.x, mStickyPointCenter1.y, mStickyPointRaidusReady, mPaint);
-            mPaint.setColor(mColorStickyPointCenterNotReady);
-            canvas.drawCircle(mStickyPointCenter0.x, mStickyPointCenter0.y, mStickyPointRaidus, mPaint);
-            canvas.drawCircle(mStickyPointCenter1.x, mStickyPointCenter1.y, mStickyPointRaidus, mPaint);
+            if (!mIsReadyToLaunch) {
+                mPaint.setColor(mColorStickyPointCenterNotReady);
+                canvas.drawCircle(mStickyPointCenter0.x, mStickyPointCenter0.y, mStickyPointRaidus, mPaint);
+                canvas.drawCircle(mStickyPointCenter1.x, mStickyPointCenter1.y, mStickyPointRaidus, mPaint);
+            }
         }
 
         private boolean isReadyToLaunch(float rawX, float rawY) {
@@ -939,7 +942,6 @@ public class UsoppBubble extends AppCompatTextView {
 //                resetToDefault();
 //                return;
 //            }
-            Point screenSize = getScreenSize(getContext());
             //得到过两点直线的斜率和偏移
             float[] k_h = Utils.getTwoPointLine(mMovePointCenter, mStickyPointCenterMid);
             float explodeRawX = rawX;
@@ -948,13 +950,13 @@ public class UsoppBubble extends AppCompatTextView {
                 case LAUNCH_TO_RIGHT:
                 case LAUNCH_TO_LEFT:
                     //最终爆炸位置在左边
-                    explodeRawX = mLaunchDire == LAUNCH_TO_LEFT ? 0 : screenSize.x;
+                    explodeRawX = mLaunchDire == LAUNCH_TO_LEFT ? 0 : mScreenSize.x;
                     explodeRawY = Utils.getYFromLine(k_h[0], k_h[1], explodeRawX);
                     break;
                 case LAUNCH_TO_BOTTOM:
                 case LAUNCH_TO_TOP:
                     //最终爆炸位置在上边
-                    explodeRawY = mLaunchDire == LAUNCH_TO_TOP ? 0 : screenSize.y;
+                    explodeRawY = mLaunchDire == LAUNCH_TO_TOP ? 0 : mScreenSize.y;
                     explodeRawX = Utils.getXFromLine(k_h[0], k_h[1], explodeRawY);
                     break;
                 case LAUNCH_DIRE_NONE:
