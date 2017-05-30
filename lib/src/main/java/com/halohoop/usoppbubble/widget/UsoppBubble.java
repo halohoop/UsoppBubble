@@ -4,6 +4,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
@@ -15,7 +16,6 @@ import android.graphics.EmbossMaskFilter;
 import android.graphics.MaskFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
@@ -25,15 +25,15 @@ import android.support.annotation.Nullable;
 import android.support.v7.widget.AppCompatTextView;
 import android.text.TextPaint;
 import android.util.AttributeSet;
-import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.TouchDelegate;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
+import android.view.ViewManager;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.view.animation.OvershootInterpolator;
+import android.widget.FrameLayout;
 
 import com.halohoop.usoppbubble.R;
 import com.halohoop.usoppbubble.utils.Utils;
@@ -100,20 +100,29 @@ public class UsoppBubble extends AppCompatTextView {
         }
     }
 
-    public void createBubbles(float rawX, float rawY) {
-        mBubblesView = new BubblesInternalView(getContext(), this, rawX, rawY);
+    public void createBubbles(float rawX, float rawY, float contentOffset) {
+        mBubblesView = new BubblesInternalView(getContext(), this, rawX, rawY, contentOffset);
+    }
+
+    private float mContentOffset = 0;
+    private float getContentOffset(){
+        int[] location = new int[2];
+        ((Activity)getContext()).findViewById(android.R.id.content).getLocationInWindow(location);
+        return location[1];
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         float rawX = event.getRawX();
-        float rawY = event.getRawY();
+        float rawY = event.getRawY()-mContentOffset;
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 //重要，请求父类不要拦截触摸事件
                 getParent().requestDisallowInterceptTouchEvent(true);
-                createBubbles(rawX, rawY);
-                mBubblesView.updatePoints(rawX, rawY);
+                //比较是否android.R.id.content在状态栏之下,
+                mContentOffset = getContentOffset();
+                createBubbles(rawX, rawY - mContentOffset, mContentOffset);
+                mBubblesView.updatePoints(rawX, rawY - mContentOffset);
                 setVisibility(View.INVISIBLE);
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -125,6 +134,7 @@ public class UsoppBubble extends AppCompatTextView {
                 mBubblesView.updatePoints(rawX, rawY);
                 mBubblesView.prepareForAnim(rawX, rawY);
 //                mParent.addView(this, mIndexAtParent);//动画结束时候才能调用
+                mContentOffset = 0;
                 break;
         }
         return true;
@@ -279,25 +289,26 @@ public class UsoppBubble extends AppCompatTextView {
         private Path mElasticPath;
         private int mElasticColor = Color.rgb(255, 78, 18);
 
-        public BubblesInternalView(Context context, UsoppBubble clickView, float rawX, float rawY) {
+        public BubblesInternalView(Context context, UsoppBubble clickView, float rawX, float rawY,
+                                   float contentOffset) {
             super(context, null, 0);
             if (DEBUG) {
                 debugPaint = new Paint();
             }
             setLayerType(LAYER_TYPE_SOFTWARE, null);
             this.mDragListener = clickView.getDragListener();
-            init(clickView, rawX, rawY);
+            init(clickView, rawX, rawY, contentOffset);
         }
 
-        private void init(UsoppBubble clickView, float rawX, float rawY) {
+        private void init(UsoppBubble clickView, float rawX, float rawY, float contentOffset) {
             this.mClickView = clickView;
-            mScreenSize = Utils.getScreenSize(getContext());
+            mScreenSize = Utils.getContentSize((Activity) getContext(), contentOffset);
 
             mResetSensorRaidus = Math.min(mScreenSize.x, mScreenSize.y) / 14.4f;//经验值
             mLaunchThreadhold = Math.min(mScreenSize.x, mScreenSize.y) / 9f;//经验值
 
-            //创建wm，并且将自己的加进去
-            createWmAndLayoutParams();
+            //创建全屏的container，并且将自己的加进去
+            createFullScreenContainerAndAddSelf();
 
             //确定固定的中点
             mClickViewRect = new Rect();
@@ -310,7 +321,7 @@ public class UsoppBubble extends AppCompatTextView {
             int top = location[1];
             mClickViewRect.offset(left, top);
             mStickyPointCenterMid.x = mClickViewRect.centerX();
-            mStickyPointCenterMid.y = mClickViewRect.centerY();
+            mStickyPointCenterMid.y = mClickViewRect.centerY() - contentOffset;
             mHalfClickViewWidth = mClickViewRect.width() / 2.0f;
 
             //得到点击的view的bitmap
@@ -355,24 +366,39 @@ public class UsoppBubble extends AppCompatTextView {
             setPaintMaskFilter(mClickView.getmMode());
         }
 
-        private WindowManager mWm;
-        private WindowManager.LayoutParams mLayoutParams;
+//        private WindowManager mWm;
+//        private WindowManager.LayoutParams mLayoutParams;
+        private ViewGroup mContentContainer;
+        private ViewGroup.LayoutParams mLayoutParams;
 
-        private void createWmAndLayoutParams() {
-            mWm = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
-            mLayoutParams = new WindowManager.LayoutParams();
-            mLayoutParams.alpha = 1.0f;
-            mLayoutParams.format = PixelFormat.RGBA_8888;
-            mLayoutParams.width = mScreenSize.x;
-            mLayoutParams.height = mScreenSize.y;
-            mLayoutParams.gravity = Gravity.LEFT | Gravity.TOP;
-            mLayoutParams.type = WindowManager.LayoutParams.TYPE_TOAST;
-            mLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                    | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;//全屏，不设置就会排在状态栏下面
-            mLayoutParams.x = 0;
-            mLayoutParams.y = 0;
-            mWm.addView(this, mLayoutParams);
+        private void createFullScreenContainerAndAddSelf() {
+            //way 1----
+//            mWm = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
+//            mLayoutParams = new WindowManager.LayoutParams();
+//            mLayoutParams.alpha = 1.0f;
+//            mLayoutParams.format = PixelFormat.RGBA_8888;
+//            mLayoutParams.width = mScreenSize.x;
+//            mLayoutParams.height = mScreenSize.y;
+//            mLayoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+//            mLayoutParams.type = WindowManager.LayoutParams.TYPE_TOAST;
+//            mLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+//                    | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+//                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;//全屏，不设置就会排在状态栏下面
+//            mLayoutParams.x = 0;
+//            mLayoutParams.y = 0;
+//            addViewForShowingBubble(mWm, this, mLayoutParams);
+
+            //way 2----
+            if (mContentContainer == null) {
+                mContentContainer = getFullScreenContainer((Activity) getContext());
+            }
+
+            mLayoutParams = new ViewGroup.LayoutParams(mScreenSize.x, mScreenSize.y);
+            addViewForShowingBubble(mContentContainer, this, mLayoutParams);
+        }
+
+        private FrameLayout getFullScreenContainer(Activity activity){
+            return (FrameLayout) activity.findViewById(android.R.id.content);
         }
 
         private float mRotateDegrees = 0;
@@ -781,21 +807,21 @@ public class UsoppBubble extends AppCompatTextView {
             mPaint.setColor(Color.rgb(150, 215, 240));
             float offset = 0;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                offset = mClickViewRect.width() - ((float)mClickViewRect.width())/1.845f;
-                canvas.drawArc(left+offset,top,right,bottom,-90,180,true,mPaint);
-                canvas.drawArc(left,top,right-offset,bottom,90,180,true,mPaint);
-            }else{
-                offset = mClickViewRect.width() - ((float)mClickViewRect.width())/1.35f;
-                canvas.drawCircle(left+offset,midHeight,midHeight,mPaint);
-                canvas.drawCircle(right-offset,midHeight,midHeight,mPaint);
+                offset = mClickViewRect.width() - ((float) mClickViewRect.width()) / 1.845f;
+                canvas.drawArc(left + offset, top, right, bottom, -90, 180, true, mPaint);
+                canvas.drawArc(left, top, right - offset, bottom, 90, 180, true, mPaint);
+            } else {
+                offset = mClickViewRect.width() - ((float) mClickViewRect.width()) / 1.35f;
+                canvas.drawCircle(left + offset, midHeight, midHeight, mPaint);
+                canvas.drawCircle(right - offset, midHeight, midHeight, mPaint);
             }
-            float halfDrawWidth = (right-(left+offset))/2.0f;
-            canvas.drawRect(halfDrawWidth,0,right-halfDrawWidth,bottom,mPaint);
+            float halfDrawWidth = (right - (left + offset)) / 2.0f;
+            canvas.drawRect(halfDrawWidth, 0, right - halfDrawWidth, bottom, mPaint);
             TextPaint paint = mClickView.getPaint();
             String text = (String) mClickView.getText();
             float halfMeasureTextWidth = paint.measureText(text, 0, text.length()) / 2.0f;
-            paint.getTextBounds(text,0,text.length(),mTextBound);
-            canvas.drawText(text,0, text.length(),midWidth - halfMeasureTextWidth,midHeight + mTextBound.height() / 2.0f,paint);
+            paint.getTextBounds(text, 0, text.length(), mTextBound);
+            canvas.drawText(text, 0, text.length(), midWidth - halfMeasureTextWidth, midHeight + mTextBound.height() / 2.0f, paint);
         }
 
         private Rect mTextBound = new Rect();
@@ -972,11 +998,6 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         public void clear() {
-            //TODO
-            /*if (mDragBitmap != null) {
-                mDragBitmap.recycle();
-                mDragBitmap = null;
-            }*/
             if (mBitmapsExplodes != null && mBitmapsExplodes.length > 0) {
                 for (int i = 0; i < mBitmapsExplodes.length; i++) {
                     mBitmapsExplodes[i].recycle();
@@ -984,7 +1005,12 @@ public class UsoppBubble extends AppCompatTextView {
                 }
                 mBitmapsExplodes = null;
             }
-            mWm.removeView(this);
+            //way--1
+//            removeViewForShowingBubble(mWm, this);//no way
+            //way--2
+            removeViewForShowingBubble(mContentContainer, this);
+            mLayoutParams = null;
+            mContentContainer = null;
         }
 
         private MaskFilter mFilter = null;
@@ -1008,6 +1034,22 @@ public class UsoppBubble extends AppCompatTextView {
         }
     }
 
+    /**
+     * @param viewManager
+     * @param view
+     * @param layoutParams
+     */
+    private static void addViewForShowingBubble(ViewManager viewManager, View view, ViewGroup.LayoutParams layoutParams) {
+        viewManager.addView(view, layoutParams);
+    }
+
+    private static void removeViewForShowingBubble(ViewManager viewManager, View view) {
+        viewManager.removeView(view);
+    }
+
+    /**
+     * callbacks
+     */
     private DraggableListener mDragListener = null;
 
     public void setDragListener(DraggableListener dragListener) {

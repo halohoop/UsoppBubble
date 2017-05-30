@@ -1,5 +1,6 @@
 package com.halohoop.usoppbubble.utils;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Point;
@@ -21,6 +22,7 @@ public class Utils {
      * @param view
      * @return
      */
+    @Deprecated
     public static Bitmap createBitmapFromView(View view) {
         Bitmap bitmap;
 //        Rect rect = new Rect();
@@ -116,9 +118,10 @@ public class Utils {
     /**
      * 获取屏幕宽高
      * @param context
+     * @param contentOffset
      * @return
      */
-    public static Point getScreenSize(Context context) {
+    public static Point getContentSize(Activity context, float contentOffset) {
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         Display display = wm.getDefaultDisplay();
         Point out = new Point();
@@ -128,6 +131,9 @@ public class Utils {
             int width = display.getWidth();
             int height = display.getHeight();
             out.set(width, height);
+        }
+        if (contentOffset > 0) {
+            out.y -= contentOffset;
         }
         return out;
     }
