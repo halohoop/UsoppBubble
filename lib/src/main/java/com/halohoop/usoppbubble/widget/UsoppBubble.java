@@ -119,7 +119,7 @@ public class UsoppBubble extends AppCompatTextView {
             case MotionEvent.ACTION_DOWN:
                 //重要，请求父类不要拦截触摸事件
                 getParent().requestDisallowInterceptTouchEvent(true);
-                //比较是否android.R.id.content在状态栏之下,
+                //android.R.id.content是否在状态栏之下,
                 mContentOffset = getContentOffset();
                 createBubbles(rawX, rawY - mContentOffset, mContentOffset);
                 mBubblesView.updatePoints(rawX, rawY - mContentOffset);
@@ -690,27 +690,11 @@ public class UsoppBubble extends AppCompatTextView {
         }
 
         private void drawBounce(Canvas canvas) {
-            //TODO
-            /*if (mDragBitmap != null && !mDragBitmap.isRecycled()) {
-                canvas.save();
-                canvas.translate(mLaunchXRaw, mLaunchYRaw);
-                canvas.save();
-                canvas.rotate(mRotateDegrees, 0, 0);
-                canvas.translate(-mClickViewRect.width(), -mClickViewRect.height() / 2.0f);
-                canvas.drawBitmap(mDragBitmap, 0, 0, null);
-                canvas.restore();
-                canvas.restore();
-            }*/
             canvas.save();
             canvas.translate(mLaunchXRaw, mLaunchYRaw);
-            canvas.save();
             canvas.rotate(mRotateDegrees, 0, 0);
             canvas.translate(-mClickViewRect.width(), -mClickViewRect.height() / 2.0f);
-            //TODO
-//            canvas.drawBitmap(mDragBitmap, 0, 0, null);
-//            canvas.drawLine(0,0,200,200,mPaint);
             drawBubble(canvas);
-            canvas.restore();
             canvas.restore();
             mElasticPath.reset();
             mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
