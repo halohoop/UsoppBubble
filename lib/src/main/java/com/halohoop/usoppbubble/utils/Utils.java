@@ -2,6 +2,7 @@ package com.halohoop.usoppbubble.utils;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.PointF;
@@ -145,5 +146,17 @@ public class Utils {
             Log.i(TAG, str);
         }
     }
+
+    public static Activity scanForActivity(Context cont) {
+        if (cont == null)
+            return null;
+        else if (cont instanceof Activity)
+            return (Activity) cont;
+        else if (cont instanceof ContextWrapper)
+            return scanForActivity(((ContextWrapper) cont).getBaseContext());
+
+        return null;
+    }
+
 
 }

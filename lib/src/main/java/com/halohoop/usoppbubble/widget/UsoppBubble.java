@@ -109,7 +109,7 @@ public class UsoppBubble extends AppCompatTextView {
 
     private float getContentOffset() {
         int[] location = new int[2];
-        ((Activity) getContext()).findViewById(android.R.id.content).getLocationInWindow(location);
+        Utils.scanForActivity(getContext()).findViewById(android.R.id.content).getLocationInWindow(location);
         return location[1];
     }
 
@@ -310,7 +310,7 @@ public class UsoppBubble extends AppCompatTextView {
 
         private void init(UsoppBubble clickView, float rawX, float rawY, float contentOffset) {
             this.mClickView = clickView;
-            mScreenSize = Utils.getContentSize((Activity) getContext(), contentOffset);
+            mScreenSize = Utils.getContentSize(Utils.scanForActivity(getContext()), contentOffset);
 
             mResetSensorRaidus = Math.min(mScreenSize.x, mScreenSize.y) / 14.4f;//经验值
             mLaunchThreadhold = Math.min(mScreenSize.x, mScreenSize.y) / 9f;//经验值
@@ -401,7 +401,7 @@ public class UsoppBubble extends AppCompatTextView {
 
             //way 2----
             if (mContentContainer == null) {
-                mContentContainer = getFullScreenContainer((Activity) getContext());
+                mContentContainer = getFullScreenContainer(Utils.scanForActivity(getContext()));
             }
 
             mLayoutParams = new ViewGroup.LayoutParams(mScreenSize.x, mScreenSize.y);
