@@ -105,16 +105,17 @@ public class UsoppBubble extends AppCompatTextView {
     }
 
     private float mContentOffset = 0;
-    private float getContentOffset(){
+
+    private float getContentOffset() {
         int[] location = new int[2];
-        ((Activity)getContext()).findViewById(android.R.id.content).getLocationInWindow(location);
+        ((Activity) getContext()).findViewById(android.R.id.content).getLocationInWindow(location);
         return location[1];
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         float rawX = event.getRawX();
-        float rawY = event.getRawY()-mContentOffset;
+        float rawY = event.getRawY() - mContentOffset;
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 //重要，请求父类不要拦截触摸事件
@@ -122,16 +123,16 @@ public class UsoppBubble extends AppCompatTextView {
                 //android.R.id.content是否在状态栏之下,
                 mContentOffset = getContentOffset();
                 createBubbles(rawX, rawY - mContentOffset, mContentOffset);
-                mBubblesView.updatePoints(rawX, rawY - mContentOffset);
+                mBubblesView.updatePointsDispatch(rawX, rawY - mContentOffset);
                 setVisibility(View.INVISIBLE);
                 break;
             case MotionEvent.ACTION_MOVE:
-                mBubblesView.updatePoints(rawX, rawY);
+                mBubblesView.updatePointsDispatch(rawX, rawY);
                 mBubblesView.invalidate();
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                mBubblesView.updatePoints(rawX, rawY);
+                mBubblesView.updatePointsDispatch(rawX, rawY);
                 mBubblesView.prepareForAnim(rawX, rawY);
 //                mParent.addView(this, mIndexAtParent);//动画结束时候才能调用
                 mContentOffset = 0;
@@ -351,7 +352,7 @@ public class UsoppBubble extends AppCompatTextView {
             mMovePointCenter.x = rawX;
             mMovePointCenter.y = rawY;
 
-            updatePoints(rawX, rawY);
+            updatePointsDispatch(rawX, rawY);
 
             //初始化爆炸动画
             initEndAnimationBitmaps();
@@ -366,7 +367,7 @@ public class UsoppBubble extends AppCompatTextView {
             setPaintMaskFilter(mClickView.getmMode());
         }
 
-//        private WindowManager mWm;
+        //        private WindowManager mWm;
 //        private WindowManager.LayoutParams mLayoutParams;
         private ViewGroup mContentContainer;
         private ViewGroup.LayoutParams mLayoutParams;
@@ -397,7 +398,7 @@ public class UsoppBubble extends AppCompatTextView {
             addViewForShowingBubble(mContentContainer, this, mLayoutParams);
         }
 
-        private FrameLayout getFullScreenContainer(Activity activity){
+        private FrameLayout getFullScreenContainer(Activity activity) {
             return (FrameLayout) activity.findViewById(android.R.id.content);
         }
 
@@ -413,7 +414,7 @@ public class UsoppBubble extends AppCompatTextView {
          * @param currMoveX
          * @param currMoveY
          */
-        public void updatePoints(float currMoveX, float currMoveY) {
+        public void updatePointsDispatch(float currMoveX, float currMoveY) {
             mBubbleState = BUBBLE_STATE_DRAGGING;
             mIsReadyToLaunch = isReadyToLaunch(currMoveX, currMoveY);
 
@@ -449,7 +450,10 @@ public class UsoppBubble extends AppCompatTextView {
             float disX = Math.abs(mStickyPointCenterMid.x - currMoveX);
             float disY = Math.abs(mStickyPointCenterMid.y - currMoveY);
             double tanRadian = Math.atan(disY / disX);
-            float tanDegree = Utils.radian2Degree(tanRadian);
+            float tanDegree = 0;
+            if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH) {
+                tanDegree = Utils.radian2Degree(tanRadian);
+            }
             mDragBitmapOffsetX = -mClickViewRect.width();
             mDragBitmapOffsetY = -mClickViewRect.height() / 2.0f;
             float deltaX = (float) (Math.sin(tanRadian) * mHalfClickViewWidth * mLargerRatio);
@@ -466,7 +470,8 @@ public class UsoppBubble extends AppCompatTextView {
             float bezierOuterSidesDisY = (float) (Math.cos(tanRadian) * (innerQuadSidesOffset + outerQuadSidesOffset));
             if (mStickyPointCenterMid.x <= currMoveX && mStickyPointCenterMid.y > currMoveY) {
                 //第1象限 + 负y轴
-                mRotateDegrees = -tanDegree;
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
+                    mRotateDegrees = -tanDegree;
                 //得到两个桩点坐标
                 mStickyPointCenter0.x = mStickyPointCenterMid.x - deltaX;
                 mStickyPointCenter0.y = mStickyPointCenterMid.y - deltaY;
@@ -490,7 +495,8 @@ public class UsoppBubble extends AppCompatTextView {
                 mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY + bezierOuterSidesDisY;
             } else if (mStickyPointCenterMid.x > currMoveX && mStickyPointCenterMid.y >= currMoveY) {
                 //第2象限 + 负x轴
-                mRotateDegrees = -(180 - tanDegree);
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
+                    mRotateDegrees = -(180 - tanDegree);
                 //得到两个桩点坐标
                 mStickyPointCenter0.x = mStickyPointCenterMid.x - deltaX;
                 mStickyPointCenter0.y = mStickyPointCenterMid.y + deltaY;
@@ -514,7 +520,8 @@ public class UsoppBubble extends AppCompatTextView {
                 mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY - bezierOuterSidesDisY;
             } else if (mStickyPointCenterMid.x >= currMoveX && mStickyPointCenterMid.y < currMoveY) {
                 //第3象限 + 正y轴
-                mRotateDegrees = 180 - tanDegree;
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
+                    mRotateDegrees = 180 - tanDegree;
                 //得到两个桩点坐标
                 mStickyPointCenter0.x = mStickyPointCenterMid.x + deltaX;
                 mStickyPointCenter0.y = mStickyPointCenterMid.y + deltaY;
@@ -538,7 +545,8 @@ public class UsoppBubble extends AppCompatTextView {
                 mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY - bezierOuterSidesDisY;
             } else if (mStickyPointCenterMid.x < currMoveX && mStickyPointCenterMid.y <= currMoveY) {
                 //第4象限 + 正x轴
-                mRotateDegrees = tanDegree;
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
+                    mRotateDegrees = tanDegree;
                 //得到两个桩点坐标
                 mStickyPointCenter0.x = mStickyPointCenterMid.x + deltaX;
                 mStickyPointCenter0.y = mStickyPointCenterMid.y - deltaY;
@@ -874,17 +882,10 @@ public class UsoppBubble extends AppCompatTextView {
             //气泡改为弹性状态
             mBubbleState = BUBBLE_STATE_RELEASE_NO_LAUNCH;
             mIsBounceAnimStart = true;
-//            float offsetX = (endRawX - startRawX) * (1 - 0.05f);
-//            float offsetY = (endRawY - startRawY) * (1 - 0.05f);
-//            ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX - offsetX, endRawY - offsetY);
-
             float offsetX = mStickyPointCenterMid.x - startRawX;
             float offsetY = mStickyPointCenterMid.y - startRawY;
-            Utils.l("offsetX:"+offsetX+"--offsetY:"+offsetY);
-            Utils.l("offsetX:"+(mStickyPointCenterMid.x + offsetX)+"--offsetY:"+(mStickyPointCenterMid.y + offsetY));
             ValueAnimator anim = createLaunchAnim(startRawX, startRawY,
                     mStickyPointCenterMid.x + offsetX, mStickyPointCenterMid.y + offsetY);
-
             anim.setInterpolator(new OvershootInterpolator(2f));
             anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
