@@ -71,6 +71,7 @@ public class ListActivity extends AppCompatActivity implements UsoppBubble.Dragg
         }
     }
 
+    int mode = 0;
     class ViewHolder extends RecyclerView.ViewHolder {
 
         UsoppBubble usoppBubble;
@@ -79,7 +80,7 @@ public class ListActivity extends AppCompatActivity implements UsoppBubble.Dragg
         public ViewHolder(View itemView) {
             super(itemView);
             usoppBubble = (UsoppBubble) itemView.findViewById(R.id.bubble);
-            usoppBubble.setmMode(UsoppBubble.MODE_GLOW);
+            usoppBubble.setmMode(mode++%2==0?UsoppBubble.MODE_EMBOSS:UsoppBubble.MODE_GLOW);
             tvName = (TextView) itemView.findViewById(R.id.tv_name);
         }
     }

@@ -2,6 +2,7 @@ package com.halohoop.usoppbubble.widget;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.app.Activity;
@@ -221,6 +222,7 @@ public class UsoppBubble extends AppCompatTextView {
          */
         private float mLaunchThreadhold = 80;
         private RectF mLaunchArea = null;
+        private RectF mMaxStretch = null;
         private static final int LAUNCH_TO_LEFT = 0;
         private static final int LAUNCH_TO_TOP = 1;
         private static final int LAUNCH_TO_RIGHT = 2;
@@ -243,6 +245,11 @@ public class UsoppBubble extends AppCompatTextView {
         private float mDragBitmapOffsetY = 0;
 
         private PointF mMovePointCenter = new PointF();
+        private PointF mMoveDrawPointCenter = new PointF();
+        /**
+         * 只有发射的时候才使用，因为 图片 和 橡皮筋 的连接点 要脱离，分别用变量记录位置
+         */
+        private PointF mMoveElasticDrawPointCenterWhenLaunch = new PointF();
         private PointF mStickyPointCenter0 = new PointF();
         private PointF mStickyPointCenterMid = new PointF();
         private PointF mStickyPointCenter1 = new PointF();
@@ -325,10 +332,6 @@ public class UsoppBubble extends AppCompatTextView {
             mStickyPointCenterMid.y = mClickViewRect.centerY() - contentOffset;
             mHalfClickViewWidth = mClickViewRect.width() / 2.0f;
 
-            //得到点击的view的bitmap
-            //TODO
-//            mDragBitmap = Utils.createBitmapFromView(clickView);
-
             mStickyPointRaidus = Math.max(mClickViewRect.width(), mClickViewRect.height()) / 7.0f;//经验值
             mStickyPointRaidusReady = Math.max(mClickViewRect.width(), mClickViewRect.height()) / 7.0f;//经验值
 
@@ -344,6 +347,11 @@ public class UsoppBubble extends AppCompatTextView {
                     mStickyPointCenterMid.y - mLaunchThreadhold,
                     mStickyPointCenterMid.x + mLaunchThreadhold,
                     mStickyPointCenterMid.y + mLaunchThreadhold);
+            float oneOf3OfScreenWidth = mScreenSize.x / 3.0f;
+            mMaxStretch = new RectF(mStickyPointCenterMid.x - oneOf3OfScreenWidth,
+                    mStickyPointCenterMid.y - oneOf3OfScreenWidth,
+                    mStickyPointCenterMid.x + oneOf3OfScreenWidth,
+                    mStickyPointCenterMid.y + oneOf3OfScreenWidth);
 
             //当手指在这个区域内就不做任何旋转
             mStickySensor = new RectF(mClickViewRect.centerX() - mResetSensorRaidus, mClickViewRect.centerY() - mResetSensorRaidus,
@@ -351,6 +359,8 @@ public class UsoppBubble extends AppCompatTextView {
 
             mMovePointCenter.x = rawX;
             mMovePointCenter.y = rawY;
+            mMoveDrawPointCenter.x = rawX;
+            mMoveDrawPointCenter.y = rawY;
 
             updatePointsDispatch(rawX, rawY);
 
@@ -407,6 +417,10 @@ public class UsoppBubble extends AppCompatTextView {
          * 是否拖出达到了可以发射的区域
          */
         private boolean mIsReadyToLaunch = false;
+        /**
+         * 是否拖出达到了最大拉伸距离
+         */
+        private boolean mIsReachMaxStretch = false;
 
         /**
          * 更新弹弓固定位置的点
@@ -417,6 +431,7 @@ public class UsoppBubble extends AppCompatTextView {
         public void updatePointsDispatch(float currMoveX, float currMoveY) {
             mBubbleState = BUBBLE_STATE_DRAGGING;
             mIsReadyToLaunch = isReadyToLaunch(currMoveX, currMoveY);
+            mIsReachMaxStretch = isReachMaxStretch(currMoveX, currMoveY);
 
             //进入了重置区域
             /*if (isInResetArea(currMoveX, currMoveY)) {
@@ -428,148 +443,12 @@ public class UsoppBubble extends AppCompatTextView {
             }
             mIsDrawReset = false;*/
 
-            //首先更新移动点不要错乱
-            updateJustMovePoints(currMoveX, currMoveY);
-
-            updateStickyPointsAndElasticControlPoints(currMoveX, currMoveY);
+            //首先更新移动点不要错乱，因为后面可能需要用到最新的移动点
+            updateMoveAndControlPoints(currMoveX, currMoveY);
 
             updateLaunchDirection(mStickyPointCenterMid, mMovePointCenter);
         }
 
-        private void updateStickyPointsAndElasticControlPoints(float currMoveX, float currMoveY) {
-            float ratioInLaunchArea = 1;
-            float innerQuadSidesOffset = mMovePointQuadSidesOffset;
-            float outerQuadSidesOffset = mQuadSidesOuterOffset;
-            if (!mIsReadyToLaunch) {
-                ratioInLaunchArea = Utils.getTwoPointsDistance(currMoveX, currMoveY, mStickyPointCenterMid.x, mStickyPointCenterMid.y) / (mLaunchArea.width() / 2);
-                innerQuadSidesOffset = ratioInLaunchArea * mMovePointQuadSidesOffset;
-                outerQuadSidesOffset = ratioInLaunchArea * mQuadSidesOuterOffset;
-                mStickyPointRaidus = mStickyPointRaidusReady * (1 - ratioInLaunchArea);
-            }
-
-            float disX = Math.abs(mStickyPointCenterMid.x - currMoveX);
-            float disY = Math.abs(mStickyPointCenterMid.y - currMoveY);
-            double tanRadian = Math.atan(disY / disX);
-            float tanDegree = 0;
-            if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH) {
-                tanDegree = Utils.radian2Degree(tanRadian);
-            }
-            mDragBitmapOffsetX = -mClickViewRect.width();
-            mDragBitmapOffsetY = -mClickViewRect.height() / 2.0f;
-            float deltaX = (float) (Math.sin(tanRadian) * mHalfClickViewWidth * mLargerRatio);
-            float deltaY = (float) (Math.cos(tanRadian) * mHalfClickViewWidth * mLargerRatio);
-
-            float bezierInnerMidLineDisX = (float) (Math.cos(tanRadian) * mMovePointQuadMidLineOffset);
-            float bezierInnerMidLineDisY = (float) (Math.sin(tanRadian) * mMovePointQuadMidLineOffset);
-            float bezierInnerSidesDisX = (float) (Math.sin(tanRadian) * innerQuadSidesOffset);
-            float bezierInnerSidesDisY = (float) (Math.cos(tanRadian) * innerQuadSidesOffset);
-
-            float bezierOuterMidLineDisX = (float) (Math.cos(tanRadian) * (mMovePointQuadMidLineOffset - mQuadMidLineOuterOffset));
-            float bezierOuterMidLineDisY = (float) (Math.sin(tanRadian) * (mMovePointQuadMidLineOffset - mQuadMidLineOuterOffset));
-            float bezierOuterSidesDisX = (float) (Math.sin(tanRadian) * (innerQuadSidesOffset + outerQuadSidesOffset));
-            float bezierOuterSidesDisY = (float) (Math.cos(tanRadian) * (innerQuadSidesOffset + outerQuadSidesOffset));
-            if (mStickyPointCenterMid.x <= currMoveX && mStickyPointCenterMid.y > currMoveY) {
-                //第1象限 + 负y轴
-                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
-                    mRotateDegrees = -tanDegree;
-                //得到两个桩点坐标
-                mStickyPointCenter0.x = mStickyPointCenterMid.x - deltaX;
-                mStickyPointCenter0.y = mStickyPointCenterMid.y - deltaY;
-                mStickyPointCenter1.x = mStickyPointCenterMid.x + deltaX;
-                mStickyPointCenter1.y = mStickyPointCenterMid.y + deltaY;
-                //根据贝塞尔offset确定4个控制点
-                float bezierInnerMidLineX = currMoveX - bezierInnerMidLineDisX;
-                float bezierInnerMidLineY = currMoveY + bezierInnerMidLineDisY;
-
-                mSidesInnerBesierCtrlPoint0.x = bezierInnerMidLineX - bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint0.y = bezierInnerMidLineY - bezierInnerSidesDisY;
-                mSidesInnerBesierCtrlPoint1.x = bezierInnerMidLineX + bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint1.y = bezierInnerMidLineY + bezierInnerSidesDisY;
-
-                float bezierOuterMidLineX = currMoveX - bezierOuterMidLineDisX;
-                float bezierOuterMidLineY = currMoveY + bezierOuterMidLineDisY;
-
-                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX - bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY - bezierOuterSidesDisY;
-                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX + bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY + bezierOuterSidesDisY;
-            } else if (mStickyPointCenterMid.x > currMoveX && mStickyPointCenterMid.y >= currMoveY) {
-                //第2象限 + 负x轴
-                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
-                    mRotateDegrees = -(180 - tanDegree);
-                //得到两个桩点坐标
-                mStickyPointCenter0.x = mStickyPointCenterMid.x - deltaX;
-                mStickyPointCenter0.y = mStickyPointCenterMid.y + deltaY;
-                mStickyPointCenter1.x = mStickyPointCenterMid.x + deltaX;
-                mStickyPointCenter1.y = mStickyPointCenterMid.y - deltaY;
-                //根据贝塞尔offset确定4个控制点
-                float bezierMidLineX = currMoveX + bezierInnerMidLineDisX;
-                float bezierMidLineY = currMoveY + bezierInnerMidLineDisY;
-
-                mSidesInnerBesierCtrlPoint0.x = bezierMidLineX - bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint0.y = bezierMidLineY + bezierInnerSidesDisY;
-                mSidesInnerBesierCtrlPoint1.x = bezierMidLineX + bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint1.y = bezierMidLineY - bezierInnerSidesDisY;
-
-                float bezierOuterMidLineX = currMoveX + bezierOuterMidLineDisX;
-                float bezierOuterMidLineY = currMoveY + bezierOuterMidLineDisY;
-
-                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX - bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY + bezierOuterSidesDisY;
-                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX + bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY - bezierOuterSidesDisY;
-            } else if (mStickyPointCenterMid.x >= currMoveX && mStickyPointCenterMid.y < currMoveY) {
-                //第3象限 + 正y轴
-                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
-                    mRotateDegrees = 180 - tanDegree;
-                //得到两个桩点坐标
-                mStickyPointCenter0.x = mStickyPointCenterMid.x + deltaX;
-                mStickyPointCenter0.y = mStickyPointCenterMid.y + deltaY;
-                mStickyPointCenter1.x = mStickyPointCenterMid.x - deltaX;
-                mStickyPointCenter1.y = mStickyPointCenterMid.y - deltaY;
-                //根据贝塞尔offset确定4个控制点
-                float bezierMidLineX = currMoveX + bezierInnerMidLineDisX;
-                float bezierMidLineY = currMoveY - bezierInnerMidLineDisY;
-
-                mSidesInnerBesierCtrlPoint0.x = bezierMidLineX + bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint0.y = bezierMidLineY + bezierInnerSidesDisY;
-                mSidesInnerBesierCtrlPoint1.x = bezierMidLineX - bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint1.y = bezierMidLineY - bezierInnerSidesDisY;
-
-                float bezierOuterMidLineX = currMoveX + bezierOuterMidLineDisX;
-                float bezierOuterMidLineY = currMoveY - bezierOuterMidLineDisY;
-
-                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX + bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY + bezierOuterSidesDisY;
-                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX - bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY - bezierOuterSidesDisY;
-            } else if (mStickyPointCenterMid.x < currMoveX && mStickyPointCenterMid.y <= currMoveY) {
-                //第4象限 + 正x轴
-                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH)
-                    mRotateDegrees = tanDegree;
-                //得到两个桩点坐标
-                mStickyPointCenter0.x = mStickyPointCenterMid.x + deltaX;
-                mStickyPointCenter0.y = mStickyPointCenterMid.y - deltaY;
-                mStickyPointCenter1.x = mStickyPointCenterMid.x - deltaX;
-                mStickyPointCenter1.y = mStickyPointCenterMid.y + deltaY;
-                //根据贝塞尔offset确定4个控制点
-                float bezierMidLineX = currMoveX - bezierInnerMidLineDisX;
-                float bezierMidLineY = currMoveY - bezierInnerMidLineDisY;
-
-                mSidesInnerBesierCtrlPoint0.x = bezierMidLineX + bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint0.y = bezierMidLineY - bezierInnerSidesDisY;
-                mSidesInnerBesierCtrlPoint1.x = bezierMidLineX - bezierInnerSidesDisX;
-                mSidesInnerBesierCtrlPoint1.y = bezierMidLineY + bezierInnerSidesDisY;
-
-                float bezierOuterMidLineX = currMoveX - bezierOuterMidLineDisX;
-                float bezierOuterMidLineY = currMoveY - bezierOuterMidLineDisY;
-
-                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX + bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY - bezierOuterSidesDisY;
-                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX - bezierOuterSidesDisX;
-                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY + bezierOuterSidesDisY;
-            }
-        }
 
         private boolean isInResetArea(float rawX, float rawY) {
             return mStickySensor.contains(rawX, rawY);
@@ -645,19 +524,19 @@ public class UsoppBubble extends AppCompatTextView {
         //        private boolean mIsDrawReset = false;
         private void drawDragging(Canvas canvas) {
             canvas.save();
-            canvas.rotate(mRotateDegrees, mMovePointCenter.x, mMovePointCenter.y);
+            canvas.rotate(mRotateDegrees, mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             canvas.translate(mDragBitmapOffsetX, mDragBitmapOffsetY);
 //            if (mDragBitmap != null && !mDragBitmap.isRecycled())
-//                canvas.drawBitmap(mDragBitmap, mMovePointCenter.x, mMovePointCenter.y, null);
-//            drawBubble(canvas,mMovePointCenter.x, mMovePointCenter.y);
+//                canvas.drawBitmap(mDragBitmap, mMoveDrawPointCenter.x, mMoveDrawPointCenter.y, null);
+//            drawBubble(canvas,mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             //TODO
-            canvas.translate(mMovePointCenter.x, mMovePointCenter.y);
+            canvas.translate(mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
 //            canvas.drawLine(0,0,200,200,mPaint);
             drawBubble(canvas);
             canvas.restore();
             /*if (!mIsDrawReset) {
                 canvas.save();
-                canvas.rotate(mRotateDegrees, mMovePointCenter.x, mMovePointCenter.y);
+                canvas.rotate(mRotateDegrees, mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             }
             canvas.translate(mDragBitmapOffsetX, mDragBitmapOffsetY);
             if (mIsDrawReset) {
@@ -666,18 +545,18 @@ public class UsoppBubble extends AppCompatTextView {
                 return;
             } else {
                 if (mDragBitmap != null && !mDragBitmap.isRecycled())
-                    canvas.drawBitmap(mDragBitmap, mMovePointCenter.x, mMovePointCenter.y, null);
+                    canvas.drawBitmap(mDragBitmap, mMoveDrawPointCenter.x, mMoveDrawPointCenter.y, null);
                 canvas.restore();
             }*/
             mElasticPath.reset();
             mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
-                    mMovePointCenter.x, mMovePointCenter.y);
+                    mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint1.x, mSidesInnerBesierCtrlPoint1.y,
                     mStickyPointCenter1.x, mStickyPointCenter1.y);
 
             mElasticPath.quadTo(mSidesOuterBesierCtrlPoint1.x, mSidesOuterBesierCtrlPoint1.y,
-                    mMovePointCenter.x, mMovePointCenter.y);
+                    mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             mElasticPath.quadTo(mSidesOuterBesierCtrlPoint0.x, mSidesOuterBesierCtrlPoint0.y,
                     mStickyPointCenter0.x, mStickyPointCenter0.y);
 
@@ -707,12 +586,12 @@ public class UsoppBubble extends AppCompatTextView {
             mElasticPath.reset();
             mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
-                    mMovePointCenter.x, mMovePointCenter.y);
+                    mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint1.x, mSidesInnerBesierCtrlPoint1.y,
                     mStickyPointCenter1.x, mStickyPointCenter1.y);
 
             mElasticPath.quadTo(mSidesOuterBesierCtrlPoint1.x, mSidesOuterBesierCtrlPoint1.y,
-                    mMovePointCenter.x, mMovePointCenter.y);
+                    mMoveDrawPointCenter.x, mMoveDrawPointCenter.y);
             mElasticPath.quadTo(mSidesOuterBesierCtrlPoint0.x, mSidesOuterBesierCtrlPoint0.y,
                     mStickyPointCenter0.x, mStickyPointCenter0.y);
 
@@ -741,23 +620,21 @@ public class UsoppBubble extends AppCompatTextView {
             //TODO
             canvas.save();
             canvas.translate(mLaunchXRaw, mLaunchYRaw);
-            canvas.save();
             canvas.rotate(mRotateDegrees, 0, 0);
             canvas.translate(-mClickViewRect.width(), -mClickViewRect.height() / 2.0f);
 //            canvas.drawBitmap(mDragBitmap, 0, 0, null);
 //            canvas.drawLine(0,0,200,200,mPaint);
             drawBubble(canvas);
             canvas.restore();
-            canvas.restore();
             mElasticPath.reset();
             mElasticPath.moveTo(mStickyPointCenter0.x, mStickyPointCenter0.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint0.x, mSidesInnerBesierCtrlPoint0.y,
-                    mMovePointCenter.x, mMovePointCenter.y);
+                    mMoveElasticDrawPointCenterWhenLaunch.x, mMoveElasticDrawPointCenterWhenLaunch.y);
             mElasticPath.quadTo(mSidesInnerBesierCtrlPoint1.x, mSidesInnerBesierCtrlPoint1.y,
                     mStickyPointCenter1.x, mStickyPointCenter1.y);
 
             mElasticPath.quadTo(mSidesOuterBesierCtrlPoint1.x, mSidesOuterBesierCtrlPoint1.y,
-                    mMovePointCenter.x, mMovePointCenter.y);
+                    mMoveElasticDrawPointCenterWhenLaunch.x, mMoveElasticDrawPointCenterWhenLaunch.y);
             mElasticPath.quadTo(mSidesOuterBesierCtrlPoint0.x, mSidesOuterBesierCtrlPoint0.y,
                     mStickyPointCenter0.x, mStickyPointCenter0.y);
 
@@ -832,10 +709,28 @@ public class UsoppBubble extends AppCompatTextView {
             }
         }
 
+        /**
+         * 是到到达发射距离
+         * @param rawX
+         * @param rawY
+         * @return
+         */
         private boolean isReadyToLaunch(float rawX, float rawY) {
 //            return !mLaunchArea.contains(rawX, rawY);
             float hypot = (float) Math.hypot(rawX - mLaunchArea.centerX(), rawY - mLaunchArea.centerY());
             return hypot <= mLaunchArea.width() / 2 ? false : true;
+        }
+
+        /**
+         * 是否到达最大拉伸距离
+         * @param rawX
+         * @param rawY
+         * @return
+         */
+        private boolean isReachMaxStretch(float rawX, float rawY) {
+//            return !mLaunchArea.contains(rawX, rawY);
+            float hypot = (float) Math.hypot(rawX - mMaxStretch.centerX(), rawY - mMaxStretch.centerY());
+            return hypot <= mMaxStretch.width() / 2 ? false : true;
         }
 
         private void launch(float startRawX, float startRawY, final float endRawX, final float endRawY) {
@@ -845,21 +740,48 @@ public class UsoppBubble extends AppCompatTextView {
             //气泡改为发射状态
             mBubbleState = BUBBLE_STATE_RELEASE_LAUNCH;
             mIsLaunchAnimStart = true;
-            ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX, endRawY);
-            anim.setInterpolator(new AccelerateInterpolator(0.4f));
-            anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+
+            ValueAnimator launchAnim = createLaunchAnim(startRawX, startRawY, endRawX, endRawY);
+            launchAnim.setInterpolator(new AccelerateInterpolator(0.4f));
+            launchAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     mLaunchXRaw = (float) animation.getAnimatedValue("x_path");
                     mLaunchYRaw = (float) animation.getAnimatedValue("y_path");
-                    updateJustMovePoints(mLaunchXRaw, mLaunchYRaw);
-                    updateStickyPointsAndElasticControlPoints(mLaunchXRaw, mLaunchYRaw);
-                    invalidate();
+                    updateMoveAndControlPoints(mLaunchXRaw, mLaunchYRaw);
                 }
             });
-            anim.setDuration(100);
-            anim.addListener(new AnimatorListenerAdapter() {
+
+            ValueAnimator elasticAnim = null;
+            {//橡皮筋的动画
+                float offsetX = mStickyPointCenterMid.x - startRawX;
+                float offsetY = mStickyPointCenterMid.y - startRawY;
+                float endX = mStickyPointCenterMid.x + offsetX * 0.15f;
+                float endY = mStickyPointCenterMid.y + offsetY * 0.15f;
+                PropertyValuesHolder xPro = PropertyValuesHolder.ofFloat("x_path", startRawX, endX);
+                PropertyValuesHolder yPro = PropertyValuesHolder.ofFloat("y_path", startRawY, endY);
+                elasticAnim = ValueAnimator.ofPropertyValuesHolder(xPro, yPro);
+                elasticAnim.setInterpolator(new OvershootInterpolator(3f));
+                elasticAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator animation) {
+                        mMoveElasticDrawPointCenterWhenLaunch.x = (float) animation.getAnimatedValue("x_path");
+                        mMoveElasticDrawPointCenterWhenLaunch.y = (float) animation.getAnimatedValue("y_path");
+                        updateMoveAndControlPointsElastic(
+                                mMoveElasticDrawPointCenterWhenLaunch.x,
+                                mMoveElasticDrawPointCenterWhenLaunch.y);
+                        invalidate();
+                    }
+                });
+            }
+
+            AnimatorSet as = new AnimatorSet();
+            elasticAnim.setDuration(300);
+            launchAnim.setDuration(150);
+            as.playTogether(launchAnim,elasticAnim);
+            as.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     //修改动画执行标志
@@ -867,15 +789,171 @@ public class UsoppBubble extends AppCompatTextView {
                     endWithBubbleBurstAnim(endRawX, endRawY);
                 }
             });
-            anim.start();
+            as.start();
         }
 
-        private void updateJustMovePoints(float xRaw, float yRaw) {
-            mMovePointCenter.x = xRaw;
-            mMovePointCenter.y = yRaw;
+        private void updateMoveAndControlPointsElastic(float currMoveX, float currMoveY) {
+            //更新贝塞尔的控制点
+            float innerQuadSidesOffset = mMovePointQuadSidesOffset;
+            float outerQuadSidesOffset = mQuadSidesOuterOffset;
+            if (!mIsReadyToLaunch) {
+                float ratioInLaunchArea = Utils.getTwoPointsDistance(currMoveX, currMoveY, mStickyPointCenterMid.x, mStickyPointCenterMid.y) / (mLaunchArea.width() / 2);
+                innerQuadSidesOffset = ratioInLaunchArea * mMovePointQuadSidesOffset;
+                outerQuadSidesOffset = ratioInLaunchArea * mQuadSidesOuterOffset;
+                mStickyPointRaidus = mStickyPointRaidusReady * (1 - ratioInLaunchArea);
+            }
+
+            float disX = Math.abs(mStickyPointCenterMid.x - currMoveX);
+            float disY = Math.abs(mStickyPointCenterMid.y - currMoveY);
+            double tanRadian = Math.atan(disY / disX);
+            float tanDegree = 0;
+            if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH
+                    && mBubbleState != BUBBLE_STATE_RELEASE_LAUNCH) {
+                tanDegree = Utils.radian2Degree(tanRadian);
+            }
+            mDragBitmapOffsetX = -mClickViewRect.width();
+            mDragBitmapOffsetY = -mClickViewRect.height() / 2.0f;
+            float deltaX = (float) (Math.sin(tanRadian) * mHalfClickViewWidth * mLargerRatio);
+            float deltaY = (float) (Math.cos(tanRadian) * mHalfClickViewWidth * mLargerRatio);
+
+            float bezierInnerMidLineDisX = (float) (Math.cos(tanRadian) * mMovePointQuadMidLineOffset);
+            float bezierInnerMidLineDisY = (float) (Math.sin(tanRadian) * mMovePointQuadMidLineOffset);
+            float bezierInnerSidesDisX = (float) (Math.sin(tanRadian) * innerQuadSidesOffset);
+            float bezierInnerSidesDisY = (float) (Math.cos(tanRadian) * innerQuadSidesOffset);
+
+            float bezierOuterMidLineDisX = (float) (Math.cos(tanRadian) * (mMovePointQuadMidLineOffset - mQuadMidLineOuterOffset));
+            float bezierOuterMidLineDisY = (float) (Math.sin(tanRadian) * (mMovePointQuadMidLineOffset - mQuadMidLineOuterOffset));
+            float bezierOuterSidesDisX = (float) (Math.sin(tanRadian) * (innerQuadSidesOffset + outerQuadSidesOffset));
+            float bezierOuterSidesDisY = (float) (Math.cos(tanRadian) * (innerQuadSidesOffset + outerQuadSidesOffset));
+            if (mStickyPointCenterMid.x <= currMoveX && mStickyPointCenterMid.y > currMoveY) {
+                //第1象限 + 负y轴
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH
+                        && mBubbleState != BUBBLE_STATE_RELEASE_LAUNCH)
+                    mRotateDegrees = -tanDegree;
+                //得到两个桩点坐标
+                mStickyPointCenter0.x = mStickyPointCenterMid.x - deltaX;
+                mStickyPointCenter0.y = mStickyPointCenterMid.y - deltaY;
+                mStickyPointCenter1.x = mStickyPointCenterMid.x + deltaX;
+                mStickyPointCenter1.y = mStickyPointCenterMid.y + deltaY;
+                //根据贝塞尔offset确定4个控制点
+                float bezierInnerMidLineX = currMoveX - bezierInnerMidLineDisX;
+                float bezierInnerMidLineY = currMoveY + bezierInnerMidLineDisY;
+
+                mSidesInnerBesierCtrlPoint0.x = bezierInnerMidLineX - bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint0.y = bezierInnerMidLineY - bezierInnerSidesDisY;
+                mSidesInnerBesierCtrlPoint1.x = bezierInnerMidLineX + bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint1.y = bezierInnerMidLineY + bezierInnerSidesDisY;
+
+                float bezierOuterMidLineX = currMoveX - bezierOuterMidLineDisX;
+                float bezierOuterMidLineY = currMoveY + bezierOuterMidLineDisY;
+
+                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX - bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY - bezierOuterSidesDisY;
+                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX + bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY + bezierOuterSidesDisY;
+            } else if (mStickyPointCenterMid.x > currMoveX && mStickyPointCenterMid.y >= currMoveY) {
+                //第2象限 + 负x轴
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH
+                        && mBubbleState != BUBBLE_STATE_RELEASE_LAUNCH)
+                    mRotateDegrees = -(180 - tanDegree);
+                //得到两个桩点坐标
+                mStickyPointCenter0.x = mStickyPointCenterMid.x - deltaX;
+                mStickyPointCenter0.y = mStickyPointCenterMid.y + deltaY;
+                mStickyPointCenter1.x = mStickyPointCenterMid.x + deltaX;
+                mStickyPointCenter1.y = mStickyPointCenterMid.y - deltaY;
+                //根据贝塞尔offset确定4个控制点
+                float bezierMidLineX = currMoveX + bezierInnerMidLineDisX;
+                float bezierMidLineY = currMoveY + bezierInnerMidLineDisY;
+
+                mSidesInnerBesierCtrlPoint0.x = bezierMidLineX - bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint0.y = bezierMidLineY + bezierInnerSidesDisY;
+                mSidesInnerBesierCtrlPoint1.x = bezierMidLineX + bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint1.y = bezierMidLineY - bezierInnerSidesDisY;
+
+                float bezierOuterMidLineX = currMoveX + bezierOuterMidLineDisX;
+                float bezierOuterMidLineY = currMoveY + bezierOuterMidLineDisY;
+
+                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX - bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY + bezierOuterSidesDisY;
+                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX + bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY - bezierOuterSidesDisY;
+            } else if (mStickyPointCenterMid.x >= currMoveX && mStickyPointCenterMid.y < currMoveY) {
+                //第3象限 + 正y轴
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH
+                        && mBubbleState != BUBBLE_STATE_RELEASE_LAUNCH)
+                    mRotateDegrees = 180 - tanDegree;
+                //得到两个桩点坐标
+                mStickyPointCenter0.x = mStickyPointCenterMid.x + deltaX;
+                mStickyPointCenter0.y = mStickyPointCenterMid.y + deltaY;
+                mStickyPointCenter1.x = mStickyPointCenterMid.x - deltaX;
+                mStickyPointCenter1.y = mStickyPointCenterMid.y - deltaY;
+                //根据贝塞尔offset确定4个控制点
+                float bezierMidLineX = currMoveX + bezierInnerMidLineDisX;
+                float bezierMidLineY = currMoveY - bezierInnerMidLineDisY;
+
+                mSidesInnerBesierCtrlPoint0.x = bezierMidLineX + bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint0.y = bezierMidLineY + bezierInnerSidesDisY;
+                mSidesInnerBesierCtrlPoint1.x = bezierMidLineX - bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint1.y = bezierMidLineY - bezierInnerSidesDisY;
+
+                float bezierOuterMidLineX = currMoveX + bezierOuterMidLineDisX;
+                float bezierOuterMidLineY = currMoveY - bezierOuterMidLineDisY;
+
+                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX + bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY + bezierOuterSidesDisY;
+                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX - bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY - bezierOuterSidesDisY;
+            } else if (mStickyPointCenterMid.x < currMoveX && mStickyPointCenterMid.y <= currMoveY) {
+                //第4象限 + 正x轴
+                if (mBubbleState != BUBBLE_STATE_RELEASE_NO_LAUNCH
+                        && mBubbleState != BUBBLE_STATE_RELEASE_LAUNCH)
+                    mRotateDegrees = tanDegree;
+                //得到两个桩点坐标
+                mStickyPointCenter0.x = mStickyPointCenterMid.x + deltaX;
+                mStickyPointCenter0.y = mStickyPointCenterMid.y - deltaY;
+                mStickyPointCenter1.x = mStickyPointCenterMid.x - deltaX;
+                mStickyPointCenter1.y = mStickyPointCenterMid.y + deltaY;
+                //根据贝塞尔offset确定4个控制点
+                float bezierMidLineX = currMoveX - bezierInnerMidLineDisX;
+                float bezierMidLineY = currMoveY - bezierInnerMidLineDisY;
+
+                mSidesInnerBesierCtrlPoint0.x = bezierMidLineX + bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint0.y = bezierMidLineY - bezierInnerSidesDisY;
+                mSidesInnerBesierCtrlPoint1.x = bezierMidLineX - bezierInnerSidesDisX;
+                mSidesInnerBesierCtrlPoint1.y = bezierMidLineY + bezierInnerSidesDisY;
+
+                float bezierOuterMidLineX = currMoveX - bezierOuterMidLineDisX;
+                float bezierOuterMidLineY = currMoveY - bezierOuterMidLineDisY;
+
+                mSidesOuterBesierCtrlPoint0.x = bezierOuterMidLineX + bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint0.y = bezierOuterMidLineY - bezierOuterSidesDisY;
+                mSidesOuterBesierCtrlPoint1.x = bezierOuterMidLineX - bezierOuterSidesDisX;
+                mSidesOuterBesierCtrlPoint1.y = bezierOuterMidLineY + bezierOuterSidesDisY;
+            }
+        }
+        private void updateMoveAndControlPoints(float xRaw, float yRaw) {
+            {//更新移动点
+                mMovePointCenter.x = xRaw;
+                mMovePointCenter.y = yRaw;
+                if (mIsReachMaxStretch && !mIsLaunchAnimStart/*launch动画开始的时候还是按照移动点来显示*/) {//超过最大区域就停留在最大区域的边缘
+                    //距离
+                    float dis = Utils.getTwoPointsDistance(xRaw, yRaw, mStickyPointCenterMid.x, mStickyPointCenterMid.y);
+                    float disDraw = mMaxStretch.width() / 2.0f;
+                    float ratio = dis / disDraw;
+                    mMoveDrawPointCenter.x = mStickyPointCenterMid.x + (xRaw - mStickyPointCenterMid.x) / ratio;
+                    mMoveDrawPointCenter.y = mStickyPointCenterMid.y + (yRaw - mStickyPointCenterMid.y) / ratio;
+                } else {//如果没有就保持和移动点一致
+                    mMoveDrawPointCenter.x = xRaw;
+                    mMoveDrawPointCenter.y = yRaw;
+                }
+            }
+            //控制点在launch动画开始的时候，由另一个方法来更新
+            // see {@link updateMoveAndControlPointsElastic}
+            if(!mIsLaunchAnimStart)
+                updateMoveAndControlPointsElastic(mMoveDrawPointCenter.x,mMoveDrawPointCenter.y);
         }
 
-        private void bounce(float startRawX, float startRawY, float endRawX, float endRawY) {
+        private void bounce(float startRawX, float startRawY) {
             if (mDragListener != null) {
                 mDragListener.onOnBubbleReleaseWithoutLaunch(mClickView);
             }
@@ -885,16 +963,15 @@ public class UsoppBubble extends AppCompatTextView {
             float offsetX = mStickyPointCenterMid.x - startRawX;
             float offsetY = mStickyPointCenterMid.y - startRawY;
             ValueAnimator anim = createLaunchAnim(startRawX, startRawY,
-                    mStickyPointCenterMid.x + offsetX, mStickyPointCenterMid.y + offsetY);
-            anim.setInterpolator(new OvershootInterpolator(2f));
+                    mStickyPointCenterMid.x + offsetX * 0.15f, mStickyPointCenterMid.y + offsetY * 0.15f);
+            anim.setInterpolator(new OvershootInterpolator(3f));
             anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     mLaunchXRaw = (float) animation.getAnimatedValue("x_path");
                     mLaunchYRaw = (float) animation.getAnimatedValue("y_path");
-                    updateJustMovePoints(mLaunchXRaw, mLaunchYRaw);
-                    updateStickyPointsAndElasticControlPoints(mLaunchXRaw, mLaunchYRaw);
+                    updateMoveAndControlPoints(mLaunchXRaw, mLaunchYRaw);
                     invalidate();
                 }
             });
@@ -962,7 +1039,7 @@ public class UsoppBubble extends AppCompatTextView {
 //                return;
 //            }
             //得到过两点直线的斜率和偏移
-            float[] k_h = Utils.getTwoPointLine(mMovePointCenter, mStickyPointCenterMid);
+            float[] k_h = Utils.getTwoPointLine(mMoveDrawPointCenter, mStickyPointCenterMid);
             float explodeRawX = rawX;
             float explodeRawY = rawY;
             switch (mLaunchDire) {
@@ -984,9 +1061,9 @@ public class UsoppBubble extends AppCompatTextView {
                     break;
             }
             if (isReadyToLaunch(rawX, rawY)) {
-                launch(mMovePointCenter.x, mMovePointCenter.y, explodeRawX, explodeRawY);
+                launch(mMoveDrawPointCenter.x, mMoveDrawPointCenter.y, explodeRawX, explodeRawY);
             } else {
-                bounce(rawX, rawY, explodeRawX, explodeRawY);
+                bounce(rawX, rawY);
             }
         }
 
