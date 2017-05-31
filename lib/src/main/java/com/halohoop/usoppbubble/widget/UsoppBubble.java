@@ -871,13 +871,21 @@ public class UsoppBubble extends AppCompatTextView {
             if (mDragListener != null) {
                 mDragListener.onOnBubbleReleaseWithoutLaunch(mClickView);
             }
-            //气泡改为发射状态
+            //气泡改为弹性状态
             mBubbleState = BUBBLE_STATE_RELEASE_NO_LAUNCH;
             mIsBounceAnimStart = true;
-            float offsetX = (endRawX - startRawX) * (1 - 0.05f);
-            float offsetY = (endRawY - startRawY) * (1 - 0.05f);
-            ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX - offsetX, endRawY - offsetY);
-            anim.setInterpolator(new OvershootInterpolator(50f));
+//            float offsetX = (endRawX - startRawX) * (1 - 0.05f);
+//            float offsetY = (endRawY - startRawY) * (1 - 0.05f);
+//            ValueAnimator anim = createLaunchAnim(startRawX, startRawY, endRawX - offsetX, endRawY - offsetY);
+
+            float offsetX = mStickyPointCenterMid.x - startRawX;
+            float offsetY = mStickyPointCenterMid.y - startRawY;
+            Utils.l("offsetX:"+offsetX+"--offsetY:"+offsetY);
+            Utils.l("offsetX:"+(mStickyPointCenterMid.x + offsetX)+"--offsetY:"+(mStickyPointCenterMid.y + offsetY));
+            ValueAnimator anim = createLaunchAnim(startRawX, startRawY,
+                    mStickyPointCenterMid.x + offsetX, mStickyPointCenterMid.y + offsetY);
+
+            anim.setInterpolator(new OvershootInterpolator(2f));
             anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
@@ -959,13 +967,13 @@ public class UsoppBubble extends AppCompatTextView {
             switch (mLaunchDire) {
                 case LAUNCH_TO_RIGHT:
                 case LAUNCH_TO_LEFT:
-                    //最终爆炸位置在左边
+                    //最终爆炸位置在左边和右边
                     explodeRawX = mLaunchDire == LAUNCH_TO_LEFT ? 0 : mScreenSize.x;
                     explodeRawY = Utils.getYFromLine(k_h[0], k_h[1], explodeRawX);
                     break;
                 case LAUNCH_TO_BOTTOM:
                 case LAUNCH_TO_TOP:
-                    //最终爆炸位置在上边
+                    //最终爆炸位置在上边和下边
                     explodeRawY = mLaunchDire == LAUNCH_TO_TOP ? 0 : mScreenSize.y;
                     explodeRawX = Utils.getXFromLine(k_h[0], k_h[1], explodeRawY);
                     break;
