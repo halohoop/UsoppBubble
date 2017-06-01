@@ -2,12 +2,35 @@
 
 ![Demo pic](./sample/src/main/res/mipmap-xxxhdpi/usopp_round.png)
 
+![Demo pic](./demo3.gif)
+
 ![Demo pic](./demo2.gif)
 
 ![Demo pic](./demo.gif)
 
 ## Not finish yet!
 
+## How to use
+
+1.Use as a TextView
+
+        <com.halohoop.usoppbubble.widget.UsoppBubble
+            android:id="@+id/bubble"
+            android:textColor="@android:color/white"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right|center_vertical"
+            android:background="@drawable/bg_blue"
+            android:text="1111" />
+
+2.Use setCount(int) method to set a number instead of using setText(String);
+
+3.Use the two option below as a background:
+
+* @drawable/bg_blue
+* @drawable/bg
+
+4.Use app:drag_background_color to set the Dragging Bubble background color to match the background above.
 
 ## License
 

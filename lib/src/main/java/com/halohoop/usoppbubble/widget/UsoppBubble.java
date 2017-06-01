@@ -43,7 +43,7 @@ import com.halohoop.usoppbubble.utils.Utils;
  * Created by Pooholah on 2017/5/26.
  */
 
-public class UsoppBubble extends AppCompatTextView {
+public class UsoppBubble extends AppCompatTextView implements DraggableListener {
     private BubblesInternalView mBubblesView = null;
 //    private ViewGroup mParent;
 //    private int mIndexAtParent = 0;
@@ -51,6 +51,7 @@ public class UsoppBubble extends AppCompatTextView {
      * 可触摸区域的半径，正方形的边长的一半
      */
     private float mTouchAreaLargerRatio = 2.0f;
+    private int mDragBackgroundColor = Color.rgb(150, 215, 240);
 
     public UsoppBubble(Context context) {
         super(context);
@@ -81,6 +82,8 @@ public class UsoppBubble extends AppCompatTextView {
         TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.UsoppBubble);
         mTouchAreaLargerRatio = typedArray
                 .getFloat(R.styleable.UsoppBubble_touch_area_larger_ratio, mTouchAreaLargerRatio);
+        mDragBackgroundColor = typedArray
+                .getColor(R.styleable.UsoppBubble_drag_background_color, mDragBackgroundColor);
         typedArray.recycle();
     }
 
@@ -115,6 +118,7 @@ public class UsoppBubble extends AppCompatTextView {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if(!mTouchable)return false;
         float rawX = event.getRawX();
         float rawY = event.getRawY() - mContentOffset;
         switch (event.getAction()) {
@@ -151,15 +155,34 @@ public class UsoppBubble extends AppCompatTextView {
     public final static int MODE_EMBOSS = 2;
     private int mMode = MODE_NONE;
 
-    public int getmMode() {
+    public int getMode() {
         return mMode;
     }
 
-    public void setmMode(int mMode) {
-        this.mMode = mMode;
+    public void setMode(int mode) {
+        this.mMode = mode;
         if (mBubblesView != null) {
-            mBubblesView.setPaintMaskFilter(mMode);
+            mBubblesView.setPaintMaskFilter(mode);
         }
+    }
+
+    @Override
+    public void onBubbleDragStart(UsoppBubble view) {
+        //do nothing
+    }
+
+    @Override
+    public void onOnBubbleReleaseWithLaunch(UsoppBubble view) {
+        this.setCount(0);
+    }
+
+    @Override
+    public void onOnBubbleReleaseWithoutLaunch(UsoppBubble view) {
+
+    }
+
+    public int getDragBackgroundColor() {
+        return mDragBackgroundColor;
     }
 
     /**
@@ -374,7 +397,7 @@ public class UsoppBubble extends AppCompatTextView {
             mPaint.setColor(mElasticColor);
             mElasticPath = new Path();
 
-            setPaintMaskFilter(mClickView.getmMode());
+            setPaintMaskFilter(mClickView.getMode());
         }
 
         //        private WindowManager mWm;
@@ -673,7 +696,7 @@ public class UsoppBubble extends AppCompatTextView {
             float midWidth = right / 2.0f;
 
             mPaint.setMaskFilter(null);
-            mPaint.setColor(Color.rgb(150, 215, 240));
+            mPaint.setColor(mClickView.getDragBackgroundColor());
             float offset = 0;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 offset = mClickViewRect.width() - ((float) mClickViewRect.width()) / 1.845f;
@@ -1104,6 +1127,34 @@ public class UsoppBubble extends AppCompatTextView {
         }
     }
 
+    private int mMaxNum = 99;
+    private int mCount = 0;
+    private boolean mTouchable = false;
+
+    public int getMaxNum() {
+        return mMaxNum;
+    }
+
+    public void setMaxNum(int maxNum) {
+        this.mMaxNum = maxNum;
+    }
+
+    public void setCount(int num) {
+        this.mCount = num;
+        if (num <= 0) {
+            setVisibility(View.INVISIBLE);
+            mTouchable = false;
+        }else{
+            setVisibility(View.VISIBLE);
+            mTouchable = true;
+        }
+        super.setText(num>mMaxNum?mMaxNum+"+":""+num);
+    }
+
+    public int getCount(){
+        return mCount;
+    }
+
     /**
      * @param viewManager
      * @param view
@@ -1120,26 +1171,15 @@ public class UsoppBubble extends AppCompatTextView {
     /**
      * callbacks
      */
-    private DraggableListener mDragListener = null;
+    private DraggableListener[] mDragListener = null;
 
     public void setDragListener(DraggableListener dragListener) {
-        this.mDragListener = dragListener;
+        if(mDragListener==null) mDragListener = new DraggableListener[2];
+        this.mDragListener[0] = this;
+        this.mDragListener[1] = dragListener;
     }
 
-    public DraggableListener getDragListener() {
-        return mDragListener;
-    }
-
-    public interface DraggableListener {
-        /**
-         * 放手发射了
-         */
-        void onOnBubbleReleaseWithLaunch(UsoppBubble view);
-
-        /**
-         * 放手没有发射
-         */
-        void onOnBubbleReleaseWithoutLaunch(UsoppBubble view);
-//        void onOnBubbleDragging();//may be later
+    final private DraggableListener getDragListener() {
+        return mDragListener[0];
     }
 }

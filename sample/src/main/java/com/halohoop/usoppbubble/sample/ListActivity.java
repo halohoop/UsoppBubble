@@ -11,11 +11,12 @@ import android.view.WindowManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.halohoop.usoppbubble.widget.DraggableListener;
 import com.halohoop.usoppbubble.widget.UsoppBubble;
 
 import java.util.Random;
 
-public class ListActivity extends AppCompatActivity implements UsoppBubble.DraggableListener {
+public class ListActivity extends AppCompatActivity implements DraggableListener {
 
     private RecyclerView recycler;
     private Random random;
@@ -33,6 +34,11 @@ public class ListActivity extends AppCompatActivity implements UsoppBubble.Dragg
     }
 
     private final static String TAG = "Halohoop";
+
+    @Override
+    public void onBubbleDragStart(UsoppBubble view) {
+
+    }
 
     @Override
     public void onOnBubbleReleaseWithLaunch(UsoppBubble view) {
@@ -58,7 +64,7 @@ public class ListActivity extends AppCompatActivity implements UsoppBubble.Dragg
 
         @Override
         public void onBindViewHolder(ViewHolder holder, int position) {
-            holder.usoppBubble.setText(random.nextInt(99) + "+");
+            holder.usoppBubble.setCount(random.nextInt(200));
             holder.tvName.setText(Cheeses.sCheeseStrings[position]);
             holder.usoppBubble.setDragListener(ListActivity.this);
             holder.usoppBubble.setVisibility(View.VISIBLE);
@@ -80,7 +86,7 @@ public class ListActivity extends AppCompatActivity implements UsoppBubble.Dragg
         public ViewHolder(View itemView) {
             super(itemView);
             usoppBubble = (UsoppBubble) itemView.findViewById(R.id.bubble);
-            usoppBubble.setmMode(mode++%2!=0?UsoppBubble.MODE_EMBOSS:UsoppBubble.MODE_GLOW);
+            usoppBubble.setMode(mode++%2!=0?UsoppBubble.MODE_EMBOSS:UsoppBubble.MODE_GLOW);
             tvName = (TextView) itemView.findViewById(R.id.tv_name);
         }
     }
