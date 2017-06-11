@@ -10,6 +10,10 @@
 
 ## Not finish yet!
 
+由于此控件实习起来太繁琐，导致极度吃内存，不要用！
+
+仅做练习用；
+
 ## How to use
 
 1.Use as a TextView
